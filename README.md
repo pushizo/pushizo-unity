@@ -74,7 +74,7 @@ public class HeroSignalBootstrap : MonoBehaviour
             if (inBattle) e.PreventDefault();   // ana iş parçacığında; gerekirse daha sonra e.Display()
         };
         HeroSignal.User.PushSubscription.Changed += e => Debug.Log(e.Current.Id);
-        HeroSignal.Notifications.PermissionChanged += granted => Debug.Log(granted);
+        HeroSignal.Notifications.PermissionChanged += granted => Debug.Log(granted); // yerel izin gözlemcisinden
         HeroSignal.InAppMessages.Clicked += e => Debug.Log(e.ActionId);
 
         await HeroSignal.Notifications.RequestPermissionAsync(fallbackToSettings: true);
@@ -115,7 +115,8 @@ HeroSignal (C#: doğrulama, JSON sözleşmesi, ana iş parçacığı dağıtıc�
 
 Köprüler yalnızca metin (JSON), sayı, bool ve geri çağrı taşır; JSON biçimleri .NET MAUI köprüsüyle aynıdır.
 Android köprüsü Java'dır (Unity Gradle derlemesinde Kotlin eklentisi gerekmez); Kotlin SDK'nın `suspend` bildirim
-kutusu fonksiyonları `Continuation` ile çağrılır.
+kutusu fonksiyonları `Continuation` ile çağrılır. İzin değişiklikleri yerel SDK izin gözlemcisinden
+(`HeroSignal.Notifications.PermissionObserver` / Swift `addPermissionObserver`) `permission` olayı olarak gelir.
 
 ## Testler
 

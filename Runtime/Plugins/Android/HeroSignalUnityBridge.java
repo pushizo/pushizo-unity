@@ -61,7 +61,6 @@ public final class HeroSignalUnityBridge {
     private static volatile Context appContext;
     private static volatile boolean listenersRegistered;
     private static volatile boolean foregroundHandlerEnabled;
-    private static volatile Boolean lastPermission;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
@@ -97,7 +96,10 @@ public final class HeroSignalUnityBridge {
         public void onDidDismiss(HsInAppLifecycleEvent event) { sendLifecycle("didDismiss", event); }
     };
 
-    /** İzin iletişim kutusu sonucunu (etkinliğin ön plana dönüşü) ve ayarlardan yapılan izin değişikliklerini yakalar. */
+    /**
+     * İzin iletişim kutusu sonucunu (etkinliğin ön plana dönüşü) yakalar. Ayarlardan yapılan izin değişikliklerini
+     * yerel SDK izin gözlemcisi bildirir ({@link #PERMISSION_OBSERVER}).
+     */
     private static final Application.ActivityLifecycleCallbacks ACTIVITY_CALLBACKS = new Application.ActivityLifecycleCallbacks() {
         @Override
         public void onActivityPaused(Activity activity) {
@@ -113,10 +115,6 @@ public final class HeroSignalUnityBridge {
                 resolve = permissionPending && pausedSinceRequest;
             }
             if (resolve) resolvePermissionRequest();
-            boolean now = HeroSignal.Notifications.INSTANCE.getPermission();
-            Boolean previous = lastPermission;
-            lastPermission = now;
-            if (previous != null && previous != now) HeroSignal.Notifications.onPermissionResult();
         }
 
         @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
@@ -125,6 +123,13 @@ public final class HeroSignalUnityBridge {
         @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
         @Override public void onActivityDestroyed(Activity activity) { }
     };
+
+    /**
+     * Yerel SDK izin gözlemcisi → {@code permission} olayı ({@code {"permission":bool}}): izin isteği sonucu ve uygulama
+     * ön plana döndüğünde (izin sistem ayarlarından değişmiş olabilir) etkin izin değiştiyse çağrılır.
+     */
+    private static final HeroSignal.Notifications.PermissionObserver PERMISSION_OBSERVER =
+            granted -> emit("permission", object("permission", granted));
 
     // --- Başlatma ---
 
@@ -149,10 +154,10 @@ public final class HeroSignalUnityBridge {
             listenersRegistered = true;
             if (ctx instanceof Application) ((Application) ctx).registerActivityLifecycleCallbacks(ACTIVITY_CALLBACKS);
             HeroSignal.User.pushSubscription.addObserver(state -> {
-                lastPermission = state.getPermission();
                 emit("subscription", subscriptionJson(state));
                 return Unit.INSTANCE;
             });
+            HeroSignal.Notifications.addPermissionObserver(PERMISSION_OBSERVER);
             HeroSignal.Notifications.addForegroundLifecycleListener(event -> {
                 onForeground(event);
                 return Unit.INSTANCE;
@@ -170,7 +175,6 @@ public final class HeroSignalUnityBridge {
                 return Unit.INSTANCE;
             });
         }
-        lastPermission = HeroSignal.Notifications.INSTANCE.getPermission();
     }
 
     public static void setConsentGiven(boolean given) { HeroSignal.setConsentGiven(given); }
@@ -273,9 +277,9 @@ public final class HeroSignalUnityBridge {
             activity = permissionActivity != null ? permissionActivity.get() : null;
             permissionActivity = null;
         }
+        // İzin değiştiyse yerel SDK izin gözlemcisi `permission` olayını gönderir.
         HeroSignal.Notifications.onPermissionResult();
         boolean granted = HeroSignal.Notifications.INSTANCE.getPermission();
-        lastPermission = granted;
         // Gerekçe gösterilemiyorsa izin kalıcı olarak reddedilmiştir (sistem iletişim kutusu artık açılmaz).
         if (!granted && fallback && activity != null
                 && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {

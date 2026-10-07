@@ -40,6 +40,9 @@ namespace HeroSignalSdk.Internal
             return new PushSubscriptionState(Str(root, "id"), Str(root, "token"), Bool(root, "optedIn"), Bool(root, "permission"));
         }
 
+        /// <summary><c>{"permission":bool}</c> (yerel izin gözlemcisi olayı).</summary>
+        public static bool ParsePermission(string json) => Bool(Object(json), "permission");
+
         public static InAppMessageClickedEventArgs ParseInAppClick(string json)
         {
             var root = Object(json);

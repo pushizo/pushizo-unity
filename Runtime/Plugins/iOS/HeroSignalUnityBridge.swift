@@ -37,7 +37,6 @@ final class HSUnityBridgeState: NSObject {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(didRegister(_:)), name: NSNotification.Name("kUnityDidRegisterForRemoteNotificationsWithDeviceToken"), object: nil)
         center.addObserver(self, selector: #selector(didFailToRegister(_:)), name: NSNotification.Name("kUnityDidFailToRegisterForRemoteNotificationsWithError"), object: nil)
-        center.addObserver(self, selector: #selector(didBecomeActive(_:)), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
     /// Unity token'ı `userInfo` alanında (sözlük değil, doğrudan NSData) gönderir; köprüleme yapmadan okunur.
@@ -51,10 +50,6 @@ final class HSUnityBridgeState: NSObject {
         if let error = HSUnityBridgeState.payload(notification) as? NSError {
             HeroSignal.setDeviceTokenError(error)
         }
-    }
-
-    @objc private func didBecomeActive(_ notification: NSNotification) {
-        hsuRefreshState()
     }
 
     private static func payload(_ notification: NSNotification) -> Any? {
@@ -314,6 +309,12 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
             hsuEmit("inAppClick", ["messageId": event.messageId, "actionId": event.actionId, "url": event.url ?? NSNull()])
         }
         HeroSignal.InAppMessages.addLifecycleListener(state.lifecycleRelay)
+        // Yerel SDK izin gözlemcisi → `permission` olayı (`{"permission":bool}`): requestPermission sonrası ve uygulama
+        // yeniden etkinleştiğinde (izin Ayarlar'dan değişmiş olabilir) etkin izin değiştiyse çağrılır.
+        HeroSignal.Notifications.addPermissionObserver { granted in
+            state.lock.lock(); state.cachedPermission = granted; state.lock.unlock()
+            hsuEmit("permission", ["permission": granted])
+        }
         // En son: uygulamayı açan (bekleyen) tıklama bu çağrıda iletilir.
         HeroSignal.Notifications.addClickListener { event in
             hsuEmit("click", [

@@ -169,6 +169,10 @@ namespace HeroSignalSdk
                     case "subscription":
                         User.PushSubscription.Dispatch(BridgeJson.ParseSubscriptionState(json));
                         break;
+                    case "permission":
+                        // Yerel SDK izin gözlemcisi; abonelik olayıyla gelen aynı değişiklik NotificationsManager'da elenir.
+                        Notifications.DispatchPermission(BridgeJson.ParsePermission(json));
+                        break;
                     case "inAppClick":
                         InAppMessages.DispatchClicked(BridgeJson.ParseInAppClick(json));
                         break;

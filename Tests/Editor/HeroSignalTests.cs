@@ -184,6 +184,23 @@ namespace HeroSignalSdk.Tests
         }
 
         [Test]
+        public void Native_permission_observer_event_raises_permission_changed_once()
+        {
+            Init();
+            var permissions = new List<bool>();
+            HeroSignal.Notifications.PermissionChanged += p => permissions.Add(p);
+
+            // Başlangıç durumu (izin yok) abonelik olayıyla gelir; yerel izin gözlemcisi olayı yalnızca değişiklikte iletilir.
+            _bridge.Emit("subscription", @"{""id"":""sub_1"",""token"":""tok"",""optedIn"":true,""permission"":false}");
+            _bridge.Emit("permission", @"{""permission"":true}");
+            _bridge.Emit("subscription", @"{""id"":""sub_1"",""token"":""tok"",""optedIn"":true,""permission"":true}");
+            _bridge.Emit("permission", @"{""permission"":true}");
+            _bridge.Emit("permission", @"{""permission"":false}");
+
+            CollectionAssert.AreEqual(new[] { true, false }, permissions);
+        }
+
+        [Test]
         public void In_app_events_are_mapped_and_faulty_payloads_are_ignored()
         {
             Init();
