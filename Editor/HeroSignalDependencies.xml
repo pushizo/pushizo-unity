@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  External Dependency Manager for Unity (EDM4U) bağımlılıkları. EDM4U projede yoksa:
+  https://github.com/googlesamples/unity-jar-resolver (UPM: com.google.external-dependency-manager).
+  Android: yerel SDK + Java köprüsünün (Runtime/Plugins/Android) derleme zamanı bağımlılıkları.
+  iOS: yerel SDK pod'u UnityFramework hedefine eklenir; NSE hedefi Podfile'a post-process ile eklenir.
+  Yerel SDK henüz Maven Central/CocoaPods'ta değilse README "Yerel SDK'yı kaynaktan kullanma" bölümüne bakın.
+-->
+<dependencies>
+  <androidPackages>
+    <repositories>
+      <repository>https://repo.maven.apache.org/maven2</repository>
+      <repository>https://maven.google.com</repository>
+    </repositories>
+    <androidPackage spec="com.herosignal:herosignal-android:0.1.0" />
+    <!-- Köprü (Java) Kotlin stdlib (Unit, Continuation) ve AndroidX Core (izin, bildirim tepsisi) tiplerini doğrudan kullanır. -->
+    <androidPackage spec="org.jetbrains.kotlin:kotlin-stdlib:2.0.21" />
+    <androidPackage spec="androidx.core:core:1.15.0" />
+  </androidPackages>
+  <iosPods>
+    <iosPod name="HeroSignal/App" version="~> 0.1.0" minTargetSdk="15.0" addToAllTargets="false" />
+  </iosPods>
+</dependencies>
