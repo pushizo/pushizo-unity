@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   HeroSignal Unity paketini gerçek Unity Editor'de derler ve EditMode testlerini çalıştırır.
 
