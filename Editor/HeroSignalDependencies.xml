@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  External Dependency Manager for Unity (EDM4U) bağımlılıkları. EDM4U, Editor klasörlerindeki *Dependencies.xml
+  dosyalarını okur: Android'de Gradle bağımlılıklarını (Android Resolver), iOS'ta CocoaPods'u (iOS Resolver) ekler.
+  Yerel SDK sürümleri package.json sürümüyle birlikte güncellenir.
+-->
+<dependencies>
+  <androidPackages>
+    <!-- HeroSignal Android SDK (sdk/android; Maven Central yayını Faz 14). -->
+    <androidPackage spec="com.herosignal:herosignal-android:0.1.0">
+      <repositories>
+        <repository>https://repo.maven.apache.org/maven2</repository>
+      </repositories>
+    </androidPackage>
+    <!-- FCM token ve mesaj alma (yerel SDK ile aynı sürüm). -->
+    <androidPackage spec="com.google.firebase:firebase-messaging:24.1.0">
+      <repositories>
+        <repository>https://maven.google.com</repository>
+      </repositories>
+    </androidPackage>
+  </androidPackages>
+
+  <iosPods>
+    <!-- Uygulama hedefi (UnityFramework): HeroSignal/App alt spec'i. NSE hedefi HeroSignalIosPostProcess ile eklenir. -->
+    <iosPod name="HeroSignal" version="0.1.0" minTargetSdk="15.0" addToAllTargets="false" />
+  </iosPods>
+</dependencies>

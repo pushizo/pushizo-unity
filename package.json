@@ -1,0 +1,31 @@
+{
+  "name": "com.herosignal.unity",
+  "version": "0.1.0",
+  "displayName": "HeroSignal",
+  "description": "HeroSignal push bildirimleri, in-app mesajlar ve bildirim kutusu için Unity SDK'sı (eski sağlayıcı v5 yüzeyiyle uyumlu). Android ve iOS yerel SDK'larını sarar; bağımlılıklar External Dependency Manager for Unity (EDM4U) ile çözülür.",
+  "unity": "2021.3",
+  "author": {
+    "name": "HeroSignal",
+    "url": "https://github.com/herosignal/herosignal"
+  },
+  "license": "MIT",
+  "keywords": [
+    "herosignal",
+    "push",
+    "notifications",
+    "fcm",
+    "apns",
+    "in-app",
+    "inbox"
+  ],
+  "documentationUrl": "https://github.com/herosignal/herosignal/blob/main/docs/sdk/unity.md",
+  "changelogUrl": "https://github.com/herosignal/herosignal/blob/main/sdk/unity/CHANGELOG.md",
+  "dependencies": {},
+  "samples": [
+    {
+      "displayName": "Temel kullanım",
+      "description": "Başlatma, izin, login, tag, olay, in-app tetiği ve bildirim kutusu örneği (MonoBehaviour).",
+      "path": "Samples~/BasicUsage"
+    }
+  ]
+}

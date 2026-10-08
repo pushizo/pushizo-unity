@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Tests/Editor altındaki NUnit testlerini (Unity Test Framework ile aynı dosyalar) dotnet test ile çalıştırır.
+    Derleme adı Unity test asmdef'iyle aynıdır (InternalsVisibleTo). Editor/GoogleServicesXml.cs saf C# olduğundan dahildir.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>HeroSignal.Unity.Tests.Editor</AssemblyName>
+    <RootNamespace>HeroSignalSdk.Unity.Tests</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <DefineConstants>$(DefineConstants);HEROSIGNAL_DOTNET_VALIDATION</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Tests\Editor\**\*.cs" />
+    <Compile Include="..\..\Editor\GoogleServicesXml.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\HeroSignal.Unity.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Platformlar arası ortak test vektörleri (Unity'de paket yolundan okunur). -->
+    <None Include="..\..\..\testdata\messaging-vectors.json" Link="testdata\messaging-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

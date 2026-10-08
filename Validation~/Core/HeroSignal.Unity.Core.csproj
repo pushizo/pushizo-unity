@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Unity editörü olmadan doğrulama: Runtime/Core (UnityEngine'e bağımlı olmayan çekirdek) netstandard2.1 olarak derlenir.
+    Runtime/Platform (AndroidJavaClass, DllImport, UnityEngine.Debug) derlemeye katılmaz; çekirdek bu durumda
+    UnsupportedBridge kullanır. Dil sürümü Unity 2021.3+ ile aynı tutulur (C# 9).
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>HeroSignal.Unity</AssemblyName>
+    <RootNamespace>HeroSignalSdk.Unity</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Runtime\Core\**\*.cs" />
+  </ItemGroup>
+</Project>

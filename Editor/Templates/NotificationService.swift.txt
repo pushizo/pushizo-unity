@@ -1,0 +1,25 @@
+import Foundation
+import HeroSignal
+import UserNotifications
+
+// HeroSignal Unity paketinin ürettiği Notification Service Extension (HeroSignalIosPostProcess).
+// App ID, API adresi ve App Group bu uzantının Info.plist'inden okunur (HeroSignalSettings).
+class NotificationService: UNNotificationServiceExtension {
+    private lazy var heroSignal: HeroSignalNotificationServiceExtension = {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let appGroup = (info["HeroSignalAppGroup"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        return HeroSignalNotificationServiceExtension(
+            appId: info["HeroSignalAppId"] as? String ?? "",
+            apiUrl: info["HeroSignalApiUrl"] as? String ?? "https://api.herosignal.dev",
+            appGroup: appGroup
+        )
+    }()
+
+    override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+        heroSignal.didReceive(request, withContentHandler: contentHandler)
+    }
+
+    override func serviceExtensionTimeWillExpire() {
+        heroSignal.serviceExtensionTimeWillExpire()
+    }
+}
