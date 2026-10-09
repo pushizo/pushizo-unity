@@ -151,6 +151,10 @@ namespace HeroSignalSdk.Unity.Tests
             var reached = false;
             HeroSignal.Notifications.Clicked += (_, __) => throw new InvalidOperationException("boom");
             HeroSignal.Notifications.Clicked += (_, __) => reached = true;
+#if !HEROSIGNAL_DOTNET_VALIDATION
+            // İlk işleyicinin hatası yutulup hata günlüğüne yazılır (beklenen davranış).
+            UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, new System.Text.RegularExpressions.Regex("boom"));
+#endif
             _bridge.Sink.OnNotificationClicked(new NotificationClickedEventArgs(new HeroSignalNotification(), null, null));
             _main.RunAll();
             Assert.IsTrue(reached);

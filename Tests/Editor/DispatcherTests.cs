@@ -47,6 +47,10 @@ namespace HeroSignalSdk.Unity.Tests
             var ran = false;
             dispatcher.Post(() => ran = true);
             Assert.IsTrue(ran);
+#if !HEROSIGNAL_DOTNET_VALIDATION
+            // SDK işleyici hatasını yutar ve hata günlüğüne yazar; Unity Test Framework beklenmeyen hata günlüğünde testi düşürür.
+            UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, new System.Text.RegularExpressions.Regex("boom"));
+#endif
             Assert.DoesNotThrow(() => dispatcher.Post(() => throw new InvalidOperationException("boom")));
         }
 

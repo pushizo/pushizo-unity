@@ -42,14 +42,18 @@ namespace HeroSignalSdk.Unity.Tests
             Assert.Greater(checkedCount, 0);
         }
 
-        /// <summary>Doğrulama projesinde çıktı klasörü; Unity'de paket deposun içindeyse <c>sdk/testdata</c>.</summary>
+        /// <summary>
+        /// Doğrulama projesinde çıktı klasörü; Unity'de paketin fiziksel klasörünün (yerel yol veya gömülü paket) yanındaki
+        /// <c>sdk/testdata</c>. Kayıt defterinden kurulan pakette dosya yoktur ve test atlanır.
+        /// </summary>
         private static string FindVectors()
         {
-            var candidates = new[]
-            {
-                Path.Combine(AppContext.BaseDirectory, "testdata", "messaging-vectors.json"),
-                Path.GetFullPath(Path.Combine("Packages", "com.herosignal.unity", "..", "testdata", "messaging-vectors.json")),
-            };
+            var candidates = new List<string> { Path.Combine(AppContext.BaseDirectory, "testdata", "messaging-vectors.json") };
+#if !HEROSIGNAL_DOTNET_VALIDATION
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(HeroSignal).Assembly);
+            if (package != null && !string.IsNullOrEmpty(package.resolvedPath))
+                candidates.Add(Path.GetFullPath(Path.Combine(package.resolvedPath, "..", "testdata", "messaging-vectors.json")));
+#endif
             foreach (var candidate in candidates)
             {
                 if (File.Exists(candidate)) return candidate;

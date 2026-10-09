@@ -22,9 +22,24 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$project = $PSScriptRoot
-$results = Join-Path $project 'TestResults'
+$template = $PSScriptRoot
+$results = Join-Path $template 'TestResults'
 New-Item -ItemType Directory -Force -Path $results | Out-Null
+
+# Unity, adında `~` geçen proje yolunu göreli sayıp çalışma klasörüyle birleştirir; ayrıca Library önbelleği birkaç
+# yüz MB'tır. Bu yüzden proje depo dışında (geçici klasörde) kurulur ve pakete mutlak `file:` yoluyla bağlanır.
+$packageRoot = (Resolve-Path (Join-Path $template '..')).Path -replace '\\', '/'
+$project = Join-Path ([System.IO.Path]::GetTempPath()) 'herosignal-unity-testproject'
+# Unity `Assets` ve `ProjectSettings` olmayan dizini proje saymaz; boş `ProjectSettings` ile ilk açılışta varsayılan
+# şablon paketlerini ekler. Minimal manifest her koşuda yeniden yazılır (ağdan gereksiz paket çekilmez).
+foreach ($dir in 'Packages', 'Assets', 'ProjectSettings') {
+  New-Item -ItemType Directory -Force -Path (Join-Path $project $dir) | Out-Null
+}
+Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $project 'Packages\packages-lock.json')
+$manifest = Get-Content (Join-Path $template 'Packages\manifest.json') -Raw | ConvertFrom-Json
+$manifest.dependencies.'com.herosignal.unity' = "file:$packageRoot"
+$manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $project 'Packages\manifest.json') -Encoding utf8
+Write-Host "Proje: $project"
 
 if (-not $UnityPath) {
   $roots = @("$env:ProgramFiles\Unity\Hub\Editor")
@@ -43,6 +58,12 @@ if (-not $UnityPath -or -not (Test-Path $UnityPath)) {
 }
 $editorRoot = Split-Path $UnityPath -Parent
 Write-Host "Unity: $UnityPath"
+
+# Sürüm dosyası yoksa Unity projeyi "yeni" sayar ve manifesti varsayılan şablon paketleriyle (ağdan indirilen
+# analytics, purchasing…) değiştirir. Editor sürümü kurulum klasörünün adıdır (Hub düzeni: <sürüm>\Editor\Unity.exe).
+$editorVersion = Split-Path (Split-Path $editorRoot -Parent) -Leaf
+Set-Content -Path (Join-Path $project 'ProjectSettings\ProjectVersion.txt') -Value "m_EditorVersion: $editorVersion" -Encoding ascii
+$manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $project 'Packages\manifest.json') -Encoding utf8
 
 # Hedefe göre gerekli PlaybackEngines modülü.
 $modules = @{ 'Android' = 'AndroidPlayer'; 'iOS' = 'iOSSupport'; 'StandaloneWindows64' = 'WindowsStandaloneSupport' }
