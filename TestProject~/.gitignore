@@ -1,0 +1,11 @@
+# Unity'nin ürettiği dosyalar (test projesi yalnızca Packages/manifest.json ile tanımlanır).
+/Library/
+/Temp/
+/Logs/
+/UserSettings/
+/ProjectSettings/
+/Assets/
+/Packages/packages-lock.json
+/TestResults/
+*.csproj
+*.sln

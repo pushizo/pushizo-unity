@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "com.herosignal.unity": "file:../..",
+    "com.unity.test-framework": "1.6.0",
+    "com.unity.modules.androidjni": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0"
+  },
+  "testables": [
+    "com.herosignal.unity"
+  ]
+}

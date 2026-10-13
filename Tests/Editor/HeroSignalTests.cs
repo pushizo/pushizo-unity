@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using HeroSignalSdk.Internal;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace HeroSignalSdk.Tests
 {
@@ -213,8 +215,11 @@ namespace HeroSignalSdk.Tests
 
             _bridge.Emit("inAppClick", @"{""messageId"":""iam_1"",""actionId"":""buy"",""url"":null}");
             _bridge.Emit("inAppLifecycle", @"{""event"":""willDisplay"",""messageId"":""iam_1"",""json"":""{}""}");
+            // Uygulama işleyicisinin hatası SDK günlüğüne yazılır (Unity test koşucusu beklenmeyen Error günlüğünü hata sayar).
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("DidDisplay olay işleyicisi hata verdi"));
             _bridge.Emit("inAppLifecycle", @"{""event"":""didDisplay"",""messageId"":""iam_1""}");
             _bridge.Emit("inAppLifecycle", @"{""event"":""didDismiss"",""messageId"":""iam_1""}");
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"yerel olay işlenemedi \(click\)"));
             _bridge.Emit("click", "{bozuk");
             _bridge.Emit("unknown", "{}");
 
