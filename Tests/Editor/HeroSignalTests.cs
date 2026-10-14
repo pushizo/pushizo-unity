@@ -257,6 +257,84 @@ namespace HeroSignalSdk.Tests
         }
 
         [Test]
+        public void Preferences_round_trip_through_bridge_json()
+        {
+            Init();
+            _bridge.PreferencesJson =
+                @"{""preferences"":[" +
+                @"{""category"":""promo"",""channel"":null,""optedIn"":false,""explicit"":true,""source"":""sdk"",""updatedAt"":1759838400000}," +
+                @"{""category"":""news"",""channel"":""email"",""optedIn"":true,""explicit"":false,""source"":null,""updatedAt"":null}]," +
+                @"""categories"":[" +
+                @"{""key"":""promo"",""name"":{""tr"":""Kampanyalar"",""en"":""Promotions""},""description"":{""tr"":""İndirim duyuruları""},""channels"":[""android_push"",""email""],""defaultOptedIn"":false}," +
+                @"{""key"":""news"",""name"":{""de"":""Neuigkeiten""},""channels"":null}," +
+                @"{""name"":{""tr"":""Anahtarsız""}}]}";
+
+            var get = HeroSignal.User.GetPreferencesAsync();
+            Assert.IsTrue(get.IsCompleted);
+            var result = get.Result;
+            Assert.AreEqual("getPreferences", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Assert.AreEqual(2, result.Preferences.Count);
+            Assert.AreEqual("promo", result.Preferences[0].Category);
+            Assert.IsNull(result.Preferences[0].Channel);
+            Assert.IsFalse(result.Preferences[0].OptedIn);
+            Assert.IsTrue(result.Preferences[0].Explicit);
+            Assert.AreEqual("sdk", result.Preferences[0].Source);
+            Assert.AreEqual(DateTimeOffset.FromUnixTimeMilliseconds(1759838400000), result.Preferences[0].UpdatedAt);
+            Assert.AreEqual("email", result.Preferences[1].Channel);
+            Assert.IsNull(result.Preferences[1].UpdatedAt);
+            Assert.AreEqual(2, result.Categories.Count);
+            Assert.AreEqual("Kampanyalar", result.Categories[0].LocalizedName("tr"));
+            Assert.AreEqual("Promotions", result.Categories[0].LocalizedName("fr"));
+            Assert.AreEqual("İndirim duyuruları", result.Categories[0].Description["tr"]);
+            CollectionAssert.AreEqual(new[] { "android_push", "email" }, result.Categories[0].Channels);
+            Assert.IsFalse(result.Categories[0].DefaultOptedIn);
+            Assert.IsNull(result.Categories[1].Channels);
+            Assert.IsTrue(result.Categories[1].DefaultOptedIn);
+            Assert.AreEqual("Neuigkeiten", result.Categories[1].LocalizedName("tr"));
+
+            var set = HeroSignal.User.SetPreferencesAsync(new[]
+            {
+                new PreferenceInput("promo", optedIn: false),
+                new PreferenceInput("news", optedIn: true, channel: "email"),
+            });
+            Assert.IsTrue(set.IsCompleted);
+            Assert.AreEqual(2, set.Result.Preferences.Count);
+            Assert.AreEqual(
+                @"setPreferences:[{""category"":""promo"",""channel"":null,""optedIn"":false},{""category"":""news"",""channel"":""email"",""optedIn"":true}]",
+                _bridge.Calls[_bridge.Calls.Count - 1]);
+
+            _bridge.PreferencesErrorCode = "NOT_READY";
+            var failed = HeroSignal.User.GetPreferencesAsync();
+            Assert.IsTrue(failed.IsFaulted);
+            Assert.AreEqual("NOT_READY", ((HeroSignalException)failed.Exception!.InnerException!).Code);
+
+            _bridge.PreferencesErrorCode = null;
+            _bridge.PreferencesJson = @"{""preferences"":[{""optedIn"":true}]}";
+            var invalid = HeroSignal.User.GetPreferencesAsync();
+            Assert.AreEqual(HeroSignalException.InvalidResponse, ((HeroSignalException)invalid.Exception!.InnerException!).Code);
+        }
+
+        [Test]
+        public void Preferences_inputs_are_validated_before_bridge()
+        {
+            Init();
+            var calls = _bridge.Calls.Count;
+            Assert.Throws<ArgumentNullException>(() => HeroSignal.User.SetPreferencesAsync(null!));
+            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new PreferenceInput[0]));
+            var tooMany = new List<PreferenceInput>();
+            for (var i = 0; i < 101; i++) tooMany.Add(new PreferenceInput("c" + i, true));
+            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(tooMany));
+            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput(" ", true) }));
+            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput(new string('k', 65), true) }));
+            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true, "push") }));
+            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new PreferenceInput[] { null! }));
+            Assert.AreEqual(calls, _bridge.Calls.Count);
+
+            Assert.IsTrue(HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput(new string('k', 64), true, "sms") }).IsCompleted);
+            Assert.AreEqual(calls + 1, _bridge.Calls.Count);
+        }
+
+        [Test]
         public void Editor_bridge_simulates_state_without_native_sdk()
         {
             HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
@@ -274,6 +352,10 @@ namespace HeroSignalSdk.Tests
             Assert.IsFalse(HeroSignal.Notifications.RequestPermissionAsync().Result);
             var inbox = HeroSignal.Inbox.ListAsync();
             Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)inbox.Exception!.InnerException!).Code);
+            var preferences = HeroSignal.User.GetPreferencesAsync();
+            Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)preferences.Exception!.InnerException!).Code);
+            var setPreferences = HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true) });
+            Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)setPreferences.Exception!.InnerException!).Code);
         }
     }
 }

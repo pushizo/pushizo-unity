@@ -73,6 +73,8 @@ namespace HeroSignalSdk.Internal
         [DllImport("__Internal")] private static extern void hs_inbox_mark_all_read(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_inbox_archive(byte[] id, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_inbox_unread_count(int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_get_preferences(int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_set_preferences(byte[] json, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue);
 
         private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value + "\0");
@@ -209,6 +211,12 @@ namespace HeroSignalSdk.Internal
 
         public void InboxUnreadCount(NativeResult result) =>
             hs_inbox_unread_count(Register(s_results, result), s_resultCallback);
+
+        public void GetPreferences(NativeResult result) =>
+            hs_get_preferences(Register(s_results, result), s_resultCallback);
+
+        public void SetPreferences(string preferencesJson, NativeResult result) =>
+            hs_set_preferences(Utf8(preferencesJson), Register(s_results, result), s_resultCallback);
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
             hs_send_event(Utf8(name), Utf8(propertiesJson), value, hasValue ? 1 : 0);

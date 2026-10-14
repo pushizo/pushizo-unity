@@ -9,7 +9,7 @@ plan 06 §6.1 (eski sağlayıcı v5 ile uyumlu), Flutter eklentisi ve .NET MAUI 
 |----------|----------|
 | Android cihaz (minSdk 23) | Yerel Android SDK'sı; Java köprüsü `Runtime/Plugins/Android` |
 | iOS cihaz (iOS 15+) | Yerel iOS SDK'sı; Swift köprüsü `Runtime/Plugins/iOS` (`[DllImport("__Internal")]`) |
-| Unity Editor, Standalone, WebGL | Ağ çağrısı ve push yok; çağrılar günlüğe yazılır, tag/trigger/e-posta bellekte tutulur, bildirim kutusu `PLATFORM_NOT_SUPPORTED` |
+| Unity Editor, Standalone, WebGL | Ağ çağrısı ve push yok; çağrılar günlüğe yazılır, tag/trigger/e-posta bellekte tutulur, bildirim kutusu ve tercihler `PLATFORM_NOT_SUPPORTED` |
 
 Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](https://github.com/googlesamples/unity-jar-resolver)
 (Android Gradle ve iOS CocoaPods bağımlılıkları için), iOS için CocoaPods.
@@ -85,6 +85,15 @@ public class HeroSignalBootstrap : MonoBehaviour
         HeroSignal.User.AddSms("+905321234567");
         HeroSignal.User.SetLanguage("tr");
 
+        // Bildirim tercihleri (ADR-0019 §4): kategori × kanal (channel null = tüm kanallar)
+        var prefs = await HeroSignal.User.GetPreferencesAsync();
+        foreach (var category in prefs.Categories) Debug.Log(category.LocalizedName("tr"));
+        await HeroSignal.User.SetPreferencesAsync(new[]
+        {
+            new PreferenceInput("promo", optedIn: false),
+            new PreferenceInput("news", optedIn: true, channel: "email"),
+        });
+
         HeroSignal.InAppMessages.AddTrigger("level", "gold");
         HeroSignal.InAppMessages.SetScreen("shop");
         HeroSignal.InAppMessages.Paused = false;         // ara sahnede true
@@ -101,8 +110,10 @@ public class HeroSignalBootstrap : MonoBehaviour
 
 Tüm olaylar ve `Task` sonuçları Unity ana iş parçacığında teslim edilir (gizli `HeroSignalDispatcher` nesnesi).
 Ön plan bildirimi için abone varken yerel gösterim ertelenir; işleyiciler `PreventDefault()` çağırmazsa bildirim
-gösterilir (iOS'ta karar 25 sn içinde verilmelidir). Bildirim kutusu hataları `HeroSignalException.Code` taşır
-(`NOT_READY`: abonelik/kullanıcı kaydı henüz tamamlanmadı; diğerleri sunucu hata kodu).
+gösterilir (iOS'ta karar 25 sn içinde verilmelidir). Bildirim kutusu ve tercih hataları `HeroSignalException.Code` taşır
+(`NOT_READY`: abonelik/kullanıcı kaydı henüz tamamlanmadı; `INVALID_ARGUMENT`: yerel SDK girdiyi reddetti; diğerleri
+sunucu hata kodu). `SetPreferencesAsync` girdiyi köprüden önce doğrular (1-100 kayıt, kategori 1-64 karakter, kanal
+`ios_push` | `android_push` | `web_push` | `email` | `sms` ya da null); geçersizse `ArgumentException`.
 
 ## Mimari
 

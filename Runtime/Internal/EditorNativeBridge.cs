@@ -7,7 +7,7 @@ namespace HeroSignalSdk.Internal
     /// <summary>
     /// Unity Editor ve yerel SDK'sı olmayan platformlar (Standalone, WebGL…) için köprü: ağ çağrısı ve push yoktur.
     /// Çağrılar günlüğe yazılır (değerler değil, yalnızca işlem adı); tag, trigger, e-posta/SMS ve kimlik bellekte
-    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin. İzin isteği false, bildirim kutusu
+    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin. İzin isteği false, bildirim kutusu ve tercihler
     /// <see cref="HeroSignalException.PlatformNotSupported"/> döndürür.
     /// </summary>
     internal sealed class EditorNativeBridge : INativeBridge
@@ -190,8 +190,8 @@ namespace HeroSignalSdk.Internal
             lock (_gate) _paused = paused;
         }
 
-        private static void NotSupported(NativeResult result) =>
-            result(null, HeroSignalException.PlatformNotSupported, "Bildirim kutusu yalnızca Android ve iOS cihazlarda kullanılabilir.");
+        private static void NotSupported(NativeResult result, string feature = "Bildirim kutusu") =>
+            result(null, HeroSignalException.PlatformNotSupported, $"{feature} yalnızca Android ve iOS cihazlarda kullanılabilir.");
 
         public void InboxList(int limit, string? cursor, NativeResult result) => NotSupported(result);
 
@@ -202,6 +202,18 @@ namespace HeroSignalSdk.Internal
         public void InboxArchive(string id, NativeResult result) => NotSupported(result);
 
         public void InboxUnreadCount(NativeResult result) => NotSupported(result);
+
+        public void GetPreferences(NativeResult result)
+        {
+            Log("GetPreferences");
+            NotSupported(result, "Tercihler");
+        }
+
+        public void SetPreferences(string preferencesJson, NativeResult result)
+        {
+            Log("SetPreferences");
+            NotSupported(result, "Tercihler");
+        }
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) => Log("SendEvent");
     }

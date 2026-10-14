@@ -81,6 +81,59 @@ namespace HeroSignalSdk.Internal
             return root.TryGetValue("unreadCount", out var u) && u is long count ? (int)count : throw Invalid("unreadCount");
         }
 
+        /// <summary>
+        /// <c>{"preferences":[…],"categories":[…]}</c> (<see cref="INativeBridge.GetPreferences"/>). Kategorisiz tercih
+        /// <see cref="HeroSignalException.InvalidResponse"/> verir; anahtarsız kategori atlanır (yerel SDK'larla aynı).
+        /// </summary>
+        public static UserPreferences ParsePreferences(string json)
+        {
+            var root = Object(json);
+            var preferences = new List<UserPreference>();
+            if (root.TryGetValue("preferences", out var prefs) && prefs is List<object?> prefList)
+            {
+                foreach (var element in prefList)
+                {
+                    if (!(element is Dictionary<string, object?> e)) continue;
+                    preferences.Add(new UserPreference(
+                        Str(e, "category") ?? throw Invalid("category"),
+                        Str(e, "channel"),
+                        Bool(e, "optedIn"),
+                        Bool(e, "explicit"),
+                        Str(e, "source"),
+                        Millis(e, "updatedAt")));
+                }
+            }
+            var categories = new List<PreferenceCategory>();
+            if (root.TryGetValue("categories", out var cats) && cats is List<object?> catList)
+            {
+                foreach (var element in catList)
+                {
+                    if (!(element is Dictionary<string, object?> e)) continue;
+                    var key = Str(e, "key");
+                    if (string.IsNullOrEmpty(key)) continue;
+                    categories.Add(new PreferenceCategory(
+                        key!,
+                        e.TryGetValue("name", out var name) && name is Dictionary<string, object?> n ? ReadStringMap(n) : new Dictionary<string, string>(),
+                        e.TryGetValue("description", out var description) && description is Dictionary<string, object?> d ? ReadStringMap(d) : new Dictionary<string, string>(),
+                        e.TryGetValue("channels", out var channels) && channels is List<object?> c
+                            ? c.OfType<string>().Where(s => s.Length > 0).ToList()
+                            : null,
+                        // Alan yoksa varsayılan açık (yerel SDK'lardaki `default_opted_in` varsayılanı).
+                        !(e.TryGetValue("defaultOptedIn", out var defaultOptedIn) && defaultOptedIn is bool b && !b)));
+                }
+            }
+            return new UserPreferences(preferences, categories);
+        }
+
+        /// <summary>Tercih girdileri → <c>[{"category","channel","optedIn"}]</c> (kanal yoksa JSON null).</summary>
+        public static string PreferencesToJson(IEnumerable<PreferenceInput> preferences) =>
+            Json.Serialize(preferences.Select(p => (object?)new Dictionary<string, object?>
+            {
+                ["category"] = p.Category,
+                ["channel"] = p.Channel,
+                ["optedIn"] = p.OptedIn,
+            }).ToList());
+
         /// <summary><c>{"key":"value"}</c> biçimindeki metin sözlüğü (tag/trigger); sayı/bool değerler metne çevrilir.</summary>
         public static Dictionary<string, string> ParseStringMap(string? json)
         {
