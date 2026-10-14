@@ -21,7 +21,7 @@ Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](ht
 ```json
 {
   "dependencies": {
-    "com.herosignal.unity": "https://github.com/herosignal/herosignal.git?path=sdk/unity#v0.1.0"
+    "com.herosignal.unity": "https://github.com/exec0de/herosignal.git?path=sdk/unity#v0.1.0"
   }
 }
 ```
