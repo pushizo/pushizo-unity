@@ -186,7 +186,10 @@ namespace HeroSignalSdk.Internal
             return new HeroSignalNotification(
                 Str(e, "title"), Str(e, "body"), Str(e, "imageUrl"), Str(e, "url"), Str(e, "deliveryId"), Str(e, "messageId"),
                 actions,
-                e.TryGetValue("data", out var data) && data is Dictionary<string, object?> d ? ReadStringMap(d) : new Dictionary<string, string>());
+                e.TryGetValue("data", out var data) && data is Dictionary<string, object?> d ? ReadStringMap(d) : new Dictionary<string, string>(),
+                e.TryGetValue("androidNotificationId", out var trayId) && trayId is long l && l >= int.MinValue && l <= int.MaxValue
+                    ? (int)l
+                    : (int?)null);
         }
 
         private static InboxItem ReadInboxItem(Dictionary<string, object?> e) => new InboxItem(

@@ -253,6 +253,30 @@ namespace HeroSignalSdk
         /// <summary>Bildirim merkezindeki bu uygulamaya ait tüm bildirimleri kaldırır (iOS'ta rozet de sıfırlanır).</summary>
         public void ClearAll() => HeroSignal.Bridge().ClearAllNotifications();
 
+        /// <summary>
+        /// Tek bir HeroSignal bildirimini Android tepsi kimliğiyle (<see cref="HeroSignalNotification.AndroidNotificationId"/>)
+        /// kaldırır. iOS'ta kimlik metne çevrilerek <c>UNNotificationRequest.identifier</c> olarak aranır.
+        /// </summary>
+        public void RemoveNotification(int androidNotificationId) =>
+            HeroSignal.Bridge().RemoveNotification(androidNotificationId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        /// <summary>
+        /// Tek bildirimi kaldırır. iOS: bildirim isteği kimliği (<c>UNNotificationRequest.identifier</c>). Android: tepsi
+        /// kimliğinin metni; tamsayıya çevrilemezse <see cref="ArgumentException"/> fırlatılır.
+        /// </summary>
+        public void RemoveNotification(string identifier)
+        {
+            if (string.IsNullOrWhiteSpace(identifier)) throw new ArgumentException("Bildirim kimliği gerekli.", nameof(identifier));
+            HeroSignal.Bridge().RemoveNotification(identifier.Trim());
+        }
+
+        /// <summary>Aynı gruptaki bildirimleri kaldırır (Android <c>android_group</c>, iOS <c>thread-id</c>).</summary>
+        public void RemoveGroupedNotifications(string group)
+        {
+            if (string.IsNullOrWhiteSpace(group)) throw new ArgumentException("Grup anahtarı gerekli.", nameof(group));
+            HeroSignal.Bridge().RemoveGroupedNotifications(group);
+        }
+
         internal void DispatchClicked(NotificationClickedEventArgs args)
         {
             Action<NotificationClickedEventArgs>? handler;

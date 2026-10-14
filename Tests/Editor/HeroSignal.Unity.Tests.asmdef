@@ -3,6 +3,7 @@
     "rootNamespace": "HeroSignalSdk.Tests",
     "references": [
         "HeroSignal.Unity",
+        "HeroSignal.Unity.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

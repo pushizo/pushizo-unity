@@ -7,7 +7,8 @@ namespace HeroSignalSdk.Samples
 {
     /// <summary>
     /// HeroSignal demo: boş bir sahnede bir GameObject'e ekleyin ve App ID'yi Inspector'dan girin. IMGUI ile tek ekran:
-    /// izin, kimlik, tag/alias, e-posta/SMS, olay, in-app tetik, ön plan gösterimi, bildirim kutusu ve olay günlüğü.
+    /// izin, push aboneliği aç/kapa, kimlik, dil, tag/alias, e-posta/SMS, olay, in-app tetik, ön plan gösterimi, bildirim
+    /// kutusu ve olay günlüğü.
     /// Metinler sistem diline göre Türkçe/İngilizce; arayüz koyu temadır.
     /// </summary>
     public sealed class HeroSignalDemo : MonoBehaviour
@@ -36,6 +37,9 @@ namespace HeroSignalSdk.Samples
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
             ["permission"] = "Request notification permission",
+            ["optIn"] = "Opt in",
+            ["optOut"] = "Opt out",
+            ["language"] = "Set language to Turkish",
             ["login"] = "Log in",
             ["logout"] = "Log out",
             ["externalId"] = "External ID",
@@ -64,6 +68,9 @@ namespace HeroSignalSdk.Samples
         private static readonly Dictionary<string, string> Tr = new Dictionary<string, string>
         {
             ["permission"] = "Bildirim izni iste",
+            ["optIn"] = "Aboneliği aç",
+            ["optOut"] = "Aboneliği kapat",
+            ["language"] = "Dili Türkçe yap",
             ["login"] = "Giriş yap",
             ["logout"] = "Çıkış yap",
             ["externalId"] = "External ID",
@@ -187,6 +194,11 @@ namespace HeroSignalSdk.Samples
             GUILayout.Label(string.Format(T("status"), HeroSignal.Notifications.Permission, s.Id ?? "-", HeroSignal.User.ExternalId ?? "-"));
 
             if (GUILayout.Button(T("permission"))) RequestPermission();
+            // Opt-out: izin korunur ama push gönderilmez; opt-in yeniden açar.
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(T("optIn"))) Run(HeroSignal.User.PushSubscription.OptIn);
+            if (GUILayout.Button(T("optOut"))) Run(HeroSignal.User.PushSubscription.OptOut);
+            GUILayout.EndHorizontal();
             _showInForeground = GUILayout.Toggle(_showInForeground, T("foreground"));
             if (GUILayout.Button(T("clear"))) Run(() => HeroSignal.Notifications.ClearAll());
 
@@ -196,6 +208,8 @@ namespace HeroSignalSdk.Samples
             if (GUILayout.Button(T("login"))) Run(() => HeroSignal.Login(_externalId.Trim()));
             if (GUILayout.Button(T("logout"))) Run(HeroSignal.Logout);
             GUILayout.EndHorizontal();
+            // Dil, segmentlemede ve çok dilli bildirim içeriğinin seçiminde kullanılır (ISO 639-1).
+            if (GUILayout.Button(T("language"))) Run(() => HeroSignal.User.SetLanguage("tr"));
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(T("tag"))) Run(() => HeroSignal.User.AddTag("plan", "pro"));

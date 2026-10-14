@@ -41,6 +41,8 @@ Derleme sonrası işlem (`Editor/HeroSignalIosPostProcessor.cs`) otomatik olarak
 - Push Notifications yeteneği (`aps-environment`) ve Background Modes → Remote notifications,
 - isteğe bağlı App Group,
 - Swift köprüsü için derleme ayarları (`SWIFT_VERSION`, Swift çalışma zamanı gömme),
+- `Classes/Preprocessor.h` → `UNITY_USES_REMOTE_NOTIFICATIONS 1` (Unity bu değeri yalnız kendi bildirim API'leri
+  kullanıldığında açar; kapalıyken `UnityAppController` APNs token'ını almaz ve köprüye iletmez),
 - **HeroSignalNotificationServiceExtension** hedefi (zengin medya, rozet, teslimat onayı) ve Podfile'a
   `HeroSignal/Extension` pod'u ekler (EDM4U Podfile'ı 40'ta üretir, eklenti 45'te çalışır, `pod install` 50'de).
 
@@ -103,6 +105,8 @@ public class HeroSignalBootstrap : MonoBehaviour
         var page = await HeroSignal.Inbox.ListAsync(limit: 20);
         await HeroSignal.Inbox.MarkAllReadAsync();
         HeroSignal.Notifications.ClearAll();
+        HeroSignal.Notifications.RemoveGroupedNotifications("orders"); // Android android_group / iOS thread-id
+        HeroSignal.Notifications.RemoveNotification(42);               // Android tepsi kimliği; iOS'ta RemoveNotification("istek-kimligi")
         HeroSignal.Debug.SetLogLevel(LogLevel.Debug);
     }
 }

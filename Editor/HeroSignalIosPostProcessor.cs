@@ -10,8 +10,9 @@ namespace HeroSignalSdk.Editor
 {
     /// <summary>
     /// iOS derleme sonrası: Push Notifications yeteneği (aps-environment), Background Modes → remote-notification,
-    /// isteğe bağlı App Group, Swift köprüsü (Runtime/Plugins/iOS) için derleme ayarları ve Notification Service Extension
-    /// hedefi (zengin medya, rozet, teslimat onayı). Sıra 45: EDM4U Podfile'ı 40'ta üretir, <c>pod install</c> 50'de
+    /// isteğe bağlı App Group, Swift köprüsü (Runtime/Plugins/iOS) için derleme ayarları, Notification Service Extension
+    /// hedefi (zengin medya, rozet, teslimat onayı) ve <c>Classes/Preprocessor.h</c> → <c>UNITY_USES_REMOTE_NOTIFICATIONS 1</c>
+    /// (UnityAppController APNs token'ını köprüye iletsin). Sıra 45: EDM4U Podfile'ı 40'ta üretir, <c>pod install</c> 50'de
     /// çalışır; NSE hedefi ve Podfile girdisi bu aralıkta eklenir.
     /// </summary>
     public static class HeroSignalIosPostProcessor
@@ -60,6 +61,25 @@ namespace HeroSignalSdk.Editor
             capabilities.WriteToFile();
 
             if (addExtension) AddExtensionPod(buildPath);
+            EnableRemoteNotifications(buildPath);
+        }
+
+        /// <summary>
+        /// UnityAppController APNs token'ını yalnızca <c>UNITY_USES_REMOTE_NOTIFICATIONS</c> 1 iken alır ve köprünün
+        /// dinlediği <c>kUnityDidRegisterForRemoteNotificationsWithDeviceToken</c> bildirimini yayınlar. Unity bu değeri
+        /// yalnız kendi bildirim API'leri kullanıldığında açar; HeroSignal için her zaman açılır.
+        /// </summary>
+        private static void EnableRemoteNotifications(string buildPath)
+        {
+            var header = Path.Combine(buildPath, HeroSignalIosPreprocessorHeader.RelativePath);
+            if (!File.Exists(header))
+            {
+                Debug.LogWarning("[HeroSignal] " + HeroSignalIosPreprocessorHeader.RelativePath + " bulunamadı; APNs token'ı için UNITY_USES_REMOTE_NOTIFICATIONS değerini elle 1 yapın.");
+                return;
+            }
+            var content = File.ReadAllText(header);
+            var updated = HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(content);
+            if (updated != content) File.WriteAllText(header, updated);
         }
 
         private static void AddNotificationServiceExtension(PBXProject project, string mainTarget, string buildPath, HeroSignalSettings settings)

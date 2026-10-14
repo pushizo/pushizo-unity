@@ -139,6 +139,10 @@ namespace HeroSignalSdk.Internal
 
         public void ClearAllNotifications() => Log("ClearAllNotifications");
 
+        public void RemoveNotification(string id) => Log("RemoveNotification");
+
+        public void RemoveGroupedNotifications(string group) => Log("RemoveGroupedNotifications");
+
         public void SetForegroundHandlerEnabled(bool enabled)
         {
         }

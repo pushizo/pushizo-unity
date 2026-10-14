@@ -59,6 +59,8 @@ namespace HeroSignalSdk.Internal
         [DllImport("__Internal")] private static extern int hs_permission();
         [DllImport("__Internal")] private static extern void hs_request_permission(int fallbackToSettings, int requestId, PermissionCallback callback);
         [DllImport("__Internal")] private static extern void hs_clear_all_notifications();
+        [DllImport("__Internal")] private static extern void hs_remove_notification(byte[] identifier);
+        [DllImport("__Internal")] private static extern void hs_remove_grouped_notifications(byte[] group);
         [DllImport("__Internal")] private static extern void hs_set_foreground_handler_enabled(int enabled);
         [DllImport("__Internal")] private static extern void hs_foreground_display(byte[] eventId);
         [DllImport("__Internal")] private static extern void hs_add_triggers(byte[] json);
@@ -178,6 +180,10 @@ namespace HeroSignalSdk.Internal
             hs_request_permission(fallbackToSettings ? 1 : 0, Register(s_permissions, completion), s_permissionCallback);
 
         public void ClearAllNotifications() => hs_clear_all_notifications();
+
+        public void RemoveNotification(string id) => hs_remove_notification(Utf8(id));
+
+        public void RemoveGroupedNotifications(string group) => hs_remove_grouped_notifications(Utf8(group));
 
         public void SetForegroundHandlerEnabled(bool enabled) => hs_set_foreground_handler_enabled(enabled ? 1 : 0);
 

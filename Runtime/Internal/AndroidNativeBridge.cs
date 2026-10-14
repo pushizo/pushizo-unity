@@ -92,6 +92,16 @@ namespace HeroSignalSdk.Internal
 
         public void ClearAllNotifications() => Call("clearAllNotifications");
 
+        public void RemoveNotification(string id)
+        {
+            // Android tepsi kimliği tamsayıdır; iOS biçimindeki metin kimliğin burada karşılığı yoktur.
+            if (!int.TryParse(id, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var androidNotificationId))
+                throw new ArgumentException("Android bildirim kimliği tamsayı olmalı (HeroSignalNotification.AndroidNotificationId).", nameof(id));
+            Call("removeNotification", androidNotificationId);
+        }
+
+        public void RemoveGroupedNotifications(string group) => Call("removeGroupedNotifications", group);
+
         public void SetForegroundHandlerEnabled(bool enabled) => Call("setForegroundHandlerEnabled", enabled);
 
         public void ForegroundDisplay(string eventId) => Call("foregroundDisplay", eventId);
