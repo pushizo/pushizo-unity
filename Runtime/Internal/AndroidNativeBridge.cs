@@ -120,6 +120,10 @@ namespace HeroSignalSdk.Internal
 
         public void InboxUnreadCount(NativeResult result) => Call("inboxUnreadCount", new ResultCallback(result));
 
+        public void GetPreferences(NativeResult result) => Call("getPreferences", new ResultCallback(result));
+
+        public void SetPreferences(string preferencesJson, NativeResult result) => Call("setPreferences", preferencesJson, new ResultCallback(result));
+
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
             Call("sendEvent", name, propertiesJson, value, hasValue);
 

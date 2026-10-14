@@ -21,6 +21,8 @@ namespace HeroSignalSdk.Tests
         public bool PermissionResult { get; set; } = true;
         public string? InboxJson { get; set; } = "{}";
         public string? InboxErrorCode { get; set; }
+        public string? PreferencesJson { get; set; } = @"{""preferences"":[],""categories"":[]}";
+        public string? PreferencesErrorCode { get; set; }
         public string? LastEventJson { get; private set; }
         public bool LastEventHasValue { get; private set; }
 
@@ -94,6 +96,15 @@ namespace HeroSignalSdk.Tests
         public void InboxMarkAllRead(NativeResult result) => Respond("inboxMarkAllRead", result);
         public void InboxArchive(string id, NativeResult result) => Respond("inboxArchive:" + id, result);
         public void InboxUnreadCount(NativeResult result) => Respond("inboxUnreadCount", result);
+
+        private void RespondPreferences(string call, NativeResult result)
+        {
+            Record(call);
+            result(PreferencesErrorCode == null ? PreferencesJson : null, PreferencesErrorCode, PreferencesErrorCode);
+        }
+
+        public void GetPreferences(NativeResult result) => RespondPreferences("getPreferences", result);
+        public void SetPreferences(string preferencesJson, NativeResult result) => RespondPreferences("setPreferences:" + preferencesJson, result);
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue)
         {

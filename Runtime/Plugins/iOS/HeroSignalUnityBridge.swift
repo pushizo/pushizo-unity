@@ -186,6 +186,39 @@ private func hsuPageJson(_ page: HSInboxPage) -> [String: Any] {
     ]
 }
 
+/// Geçersiz öğeler (kategorisi metin olmayan) boş kategoriyle iletilir; yerel SDK doğrulaması reddeder.
+private func hsuPreferenceInputs(_ p: UnsafePointer<CChar>?) -> [HSPreferenceInput] {
+    ((hsuJsonObject(p) as? [Any]) ?? []).map { element in
+        let o = element as? [String: Any] ?? [:]
+        return HSPreferenceInput(category: o["category"] as? String ?? "", channel: o["channel"] as? String, optedIn: o["optedIn"] as? Bool ?? false)
+    }
+}
+
+private func hsuPreferenceJson(_ p: HSPreference) -> [String: Any] {
+    [
+        "category": p.category,
+        "channel": p.channel ?? NSNull(),
+        "optedIn": p.optedIn,
+        "explicit": p.explicit,
+        "source": p.source ?? NSNull(),
+        "updatedAt": hsuMillis(p.updatedAt),
+    ]
+}
+
+private func hsuCategoryJson(_ c: HSMessageCategory) -> [String: Any] {
+    [
+        "key": c.key,
+        "name": c.name,
+        "description": c.description,
+        "channels": c.channels ?? NSNull(),
+        "defaultOptedIn": c.defaultOptedIn,
+    ]
+}
+
+private func hsuPreferencesResultJson(_ r: HSPreferencesResult) -> [String: Any] {
+    ["preferences": r.preferences.map { hsuPreferenceJson($0) }, "categories": r.categories.map { hsuCategoryJson($0) }]
+}
+
 /// Önbelleği günceller; önceki bilinen durumdan farklıysa true.
 @discardableResult
 private func hsuUpdateCache(_ s: HSPushSubscriptionState) -> Bool {
@@ -525,6 +558,25 @@ public func hs_inbox_unread_count(_ requestId: Int32, _ callback: HSUResultCallb
     hsuInbox(requestId, callback) {
         let unread = try await HeroSignal.Inbox.unreadCount()
         return hsuJsonString(["unreadCount": unread])
+    }
+}
+
+/// Başarı JSON'u: {"preferences":[…],"categories":[…]} (ADR-0019 §4).
+@_cdecl("hs_get_preferences")
+public func hs_get_preferences(_ requestId: Int32, _ callback: HSUResultCallback?) {
+    hsuInbox(requestId, callback) {
+        let result = try await HeroSignal.User.getPreferences()
+        return hsuJsonString(hsuPreferencesResultJson(result))
+    }
+}
+
+/// json: [{"category","channel":null|"…","optedIn"}]; doğrulama yerel SDK'dadır (geçersizse INVALID_ARGUMENT).
+@_cdecl("hs_set_preferences")
+public func hs_set_preferences(_ json: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let inputs = hsuPreferenceInputs(json)
+    hsuInbox(requestId, callback) {
+        let result: HSPreferencesResult = try await HeroSignal.User.setPreferences(inputs)
+        return hsuJsonString(hsuPreferencesResultJson(result))
     }
 }
 

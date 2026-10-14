@@ -65,6 +65,18 @@ namespace HeroSignalSdk.Internal
         void InboxMarkAllRead(NativeResult result);
         void InboxArchive(string id, NativeResult result);
         void InboxUnreadCount(NativeResult result);
+
+        /// <summary>
+        /// Başarı JSON'u: <c>{"preferences":[{"category","channel","optedIn","explicit","source","updatedAt"}],
+        /// "categories":[{"key","name":{},"description":{},"channels":[…]|null,"defaultOptedIn"}]}</c>.
+        /// </summary>
+        void GetPreferences(NativeResult result);
+
+        /// <summary>
+        /// <paramref name="preferencesJson"/>: <c>[{"category","channel":null|"…","optedIn"}]</c>; başarı JSON'u
+        /// <see cref="GetPreferences"/> ile aynı (güncel liste).
+        /// </summary>
+        void SetPreferences(string preferencesJson, NativeResult result);
         void SendEvent(string name, string propertiesJson, double value, bool hasValue);
     }
 }

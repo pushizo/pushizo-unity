@@ -143,6 +143,98 @@ namespace HeroSignalSdk
         public bool HasMore { get; }
     }
 
+    /// <summary>
+    /// Kullanıcı tercihi (ADR-0019 §4): kategori × kanal (<c>null</c> = tüm kanallar) → opt-in. <see cref="Explicit"/>
+    /// false ise değer kategori varsayılanından türetilmiştir; <see cref="Source"/> kaydı yazan taraftır (sdk, api,
+    /// preference_center…).
+    /// </summary>
+    public sealed class UserPreference
+    {
+        internal UserPreference(string category, string? channel, bool optedIn, bool @explicit, string? source, DateTimeOffset? updatedAt)
+        {
+            Category = category;
+            Channel = channel;
+            OptedIn = optedIn;
+            Explicit = @explicit;
+            Source = source;
+            UpdatedAt = updatedAt;
+        }
+
+        public string Category { get; }
+        /// <summary><c>null</c> (tüm kanallar) veya <c>ios_push</c> | <c>android_push</c> | <c>web_push</c> | <c>email</c> | <c>sms</c>.</summary>
+        public string? Channel { get; }
+        public bool OptedIn { get; }
+        public bool Explicit { get; }
+        public string? Source { get; }
+        /// <summary>Türetilmiş değerde null.</summary>
+        public DateTimeOffset? UpdatedAt { get; }
+    }
+
+    /// <summary>Mesaj kategorisi: çok dilli ad/açıklama (<c>dil kodu → metin</c>), kanal kısıtı (<c>null</c> = tümü) ve varsayılan opt-in.</summary>
+    public sealed class PreferenceCategory
+    {
+        internal PreferenceCategory(
+            string key, IReadOnlyDictionary<string, string> name, IReadOnlyDictionary<string, string> description,
+            IReadOnlyList<string>? channels, bool defaultOptedIn)
+        {
+            Key = key;
+            Name = name;
+            Description = description;
+            Channels = channels;
+            DefaultOptedIn = defaultOptedIn;
+        }
+
+        public string Key { get; }
+        public IReadOnlyDictionary<string, string> Name { get; }
+        public IReadOnlyDictionary<string, string> Description { get; }
+        public IReadOnlyList<string>? Channels { get; }
+        public bool DefaultOptedIn { get; }
+
+        /// <summary>Verilen dilde ad; yoksa İngilizce, o da yoksa ilk tanımlı dil (anahtar sırasıyla), hiçbiri yoksa anahtar.</summary>
+        public string LocalizedName(string language)
+        {
+            if (Name.TryGetValue(language, out var name)) return name;
+            if (Name.TryGetValue("en", out var en)) return en;
+            string? firstKey = null;
+            foreach (var key in Name.Keys)
+            {
+                if (firstKey is null || string.CompareOrdinal(key, firstKey) < 0) firstKey = key;
+            }
+            return firstKey is null ? Key : Name[firstKey];
+        }
+    }
+
+    /// <summary><c>User.GetPreferencesAsync</c> / <c>SetPreferencesAsync</c> sonucu: kullanıcının tercihleri ve app'in kategorileri.</summary>
+    public sealed class UserPreferences
+    {
+        internal UserPreferences(IReadOnlyList<UserPreference> preferences, IReadOnlyList<PreferenceCategory> categories)
+        {
+            Preferences = preferences;
+            Categories = categories;
+        }
+
+        public IReadOnlyList<UserPreference> Preferences { get; }
+        public IReadOnlyList<PreferenceCategory> Categories { get; }
+    }
+
+    /// <summary><c>User.SetPreferencesAsync</c> girdisi; <see cref="Channel"/> null ise tüm kanallar.</summary>
+    public sealed class PreferenceInput
+    {
+        /// <param name="category">Kategori anahtarı (1-64 karakter).</param>
+        /// <param name="optedIn">Kategoriye (ve kanala) abone mi.</param>
+        /// <param name="channel"><c>null</c> veya <c>ios_push</c> | <c>android_push</c> | <c>web_push</c> | <c>email</c> | <c>sms</c>.</param>
+        public PreferenceInput(string category, bool optedIn, string? channel = null)
+        {
+            Category = category;
+            OptedIn = optedIn;
+            Channel = channel;
+        }
+
+        public string Category { get; }
+        public bool OptedIn { get; }
+        public string? Channel { get; }
+    }
+
     /// <summary>In-app mesaj özeti (yaşam döngüsü olaylarında).</summary>
     public sealed class InAppMessage
     {
@@ -164,6 +256,7 @@ namespace HeroSignalSdk
         public const string NotReady = "NOT_READY";
         public const string PlatformNotSupported = "PLATFORM_NOT_SUPPORTED";
         public const string InvalidResponse = "INVALID_RESPONSE";
+        public const string InvalidArgument = "INVALID_ARGUMENT";
 
         public HeroSignalException(string code, string message, Exception? innerException = null)
             : base(message, innerException)

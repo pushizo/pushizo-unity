@@ -23,7 +23,11 @@ import com.herosignal.sdk.HsInAppLifecycleListener;
 import com.herosignal.sdk.HsInboxItem;
 import com.herosignal.sdk.HsInboxPage;
 import com.herosignal.sdk.HsLog;
+import com.herosignal.sdk.HsMessageCategory;
 import com.herosignal.sdk.HsNotification;
+import com.herosignal.sdk.HsPreference;
+import com.herosignal.sdk.HsPreferenceInput;
+import com.herosignal.sdk.HsPreferencesResult;
 import com.herosignal.sdk.HsPushSubscriptionState;
 
 import org.json.JSONArray;
@@ -385,6 +389,23 @@ public final class HeroSignalUnityBridge {
         c.run(() -> HeroSignal.Inbox.INSTANCE.unreadCount(c));
     }
 
+    // --- Tercihler (ADR-0019 §4; Kotlin suspend fonksiyonları Continuation ile) ---
+
+    /** Başarı JSON'u: {"preferences":[…],"categories":[…]} (bkz. preferencesResultJson). */
+    public static void getPreferences(HeroSignalUnityCallback callback) {
+        InboxContinuation c = new InboxContinuation(callback, value -> preferencesResultJson((HsPreferencesResult) value).toString());
+        c.run(() -> HeroSignal.User.INSTANCE.getPreferences(c));
+    }
+
+    /**
+     * preferencesJson: [{"category","channel":null|"…","optedIn"}]; doğrulama yerel SDK'dadır (geçersizse
+     * INVALID_ARGUMENT). Başarı JSON'u getPreferences ile aynıdır (güncel liste).
+     */
+    public static void setPreferences(String preferencesJson, HeroSignalUnityCallback callback) {
+        InboxContinuation c = new InboxContinuation(callback, value -> preferencesResultJson((HsPreferencesResult) value).toString());
+        c.run(() -> HeroSignal.User.INSTANCE.setPreferences(preferenceInputs(preferencesJson), c));
+    }
+
     // --- Oturum ---
 
     /** propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue false ise değer gönderilmez. */
@@ -596,6 +617,48 @@ public final class HeroSignalUnityBridge {
                 "expiresAt", i.getExpiresAt(),
                 "createdAt", i.getCreatedAt());
         put(o, "data", new JSONObject(i.getData()));
+        return o;
+    }
+
+    /** Geçersiz JSON IllegalArgumentException (INVALID_ARGUMENT) olarak geri çağrıya iletilir. */
+    private static List<HsPreferenceInput> preferenceInputs(String json) {
+        JSONArray a = parseArray(json);
+        List<HsPreferenceInput> list = new ArrayList<>(a.length());
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o == null) throw new IllegalArgumentException("Geçersiz tercih öğesi: " + i);
+            String channel = o.isNull("channel") ? null : o.optString("channel");
+            list.add(new HsPreferenceInput(o.optString("category"), channel, o.optBoolean("optedIn", false)));
+        }
+        return list;
+    }
+
+    private static JSONObject preferenceJson(HsPreference p) {
+        return object(
+                "category", p.getCategory(),
+                "channel", p.getChannel(),
+                "optedIn", p.getOptedIn(),
+                "explicit", p.getExplicit(),
+                "source", p.getSource(),
+                "updatedAt", p.getUpdatedAt());
+    }
+
+    private static JSONObject categoryJson(HsMessageCategory c) {
+        JSONObject o = object("key", c.getKey(), "defaultOptedIn", c.getDefaultOptedIn());
+        put(o, "name", new JSONObject(c.getName()));
+        put(o, "description", new JSONObject(c.getDescription()));
+        put(o, "channels", c.getChannels() == null ? null : new JSONArray(c.getChannels()));
+        return o;
+    }
+
+    private static JSONObject preferencesResultJson(HsPreferencesResult r) {
+        JSONArray preferences = new JSONArray();
+        for (HsPreference p : r.getPreferences()) preferences.put(preferenceJson(p));
+        JSONArray categories = new JSONArray();
+        for (HsMessageCategory c : r.getCategories()) categories.put(categoryJson(c));
+        JSONObject o = new JSONObject();
+        put(o, "preferences", preferences);
+        put(o, "categories", categories);
         return o;
     }
 

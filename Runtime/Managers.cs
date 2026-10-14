@@ -6,7 +6,7 @@ using HeroSignalSdk.Internal;
 
 namespace HeroSignalSdk
 {
-    /// <summary>Kullanıcı: tag, alias, dil, e-posta/SMS abonelikleri ve push aboneliği (<c>HeroSignal.User</c>).</summary>
+    /// <summary>Kullanıcı: tag, alias, dil, e-posta/SMS abonelikleri, bildirim tercihleri ve push aboneliği (<c>HeroSignal.User</c>).</summary>
     public sealed class UserManager
     {
         internal UserManager()
@@ -79,6 +79,31 @@ namespace HeroSignalSdk
         public void AddSms(string phoneNumber) => HeroSignal.Bridge().AddSms(Validation.RequirePhone(phoneNumber, nameof(phoneNumber)));
 
         public void RemoveSms(string phoneNumber) => HeroSignal.Bridge().RemoveSms(Validation.RequirePhone(phoneNumber, nameof(phoneNumber)));
+
+        /// <summary>
+        /// Kullanıcının kategori/kanal tercihleri ve app'in mesaj kategorileri (ADR-0019 §4); sonuç ana iş parçacığında
+        /// teslim edilir. Abonelik kaydı tamamlanmadan <see cref="HeroSignalException"/> (<c>NOT_READY</c>); Editor'de
+        /// <c>PLATFORM_NOT_SUPPORTED</c>.
+        /// </summary>
+        public Task<UserPreferences> GetPreferencesAsync()
+        {
+            var bridge = HeroSignal.Bridge();
+            return HeroSignal.Call(r => bridge.GetPreferences(r), json => BridgeJson.ParsePreferences(RequireJson(json)));
+        }
+
+        /// <summary>
+        /// Tercihleri yazar (1-100 kayıt; <see cref="PreferenceInput.Channel"/> null = tüm kanallar) ve güncel listeyi
+        /// döndürür. Geçersiz girdide <see cref="ArgumentException"/>.
+        /// </summary>
+        public Task<UserPreferences> SetPreferencesAsync(IEnumerable<PreferenceInput> preferences)
+        {
+            var json = BridgeJson.PreferencesToJson(Validation.RequirePreferences(preferences, nameof(preferences)));
+            var bridge = HeroSignal.Bridge();
+            return HeroSignal.Call(r => bridge.SetPreferences(json, r), result => BridgeJson.ParsePreferences(RequireJson(result)));
+        }
+
+        private static string RequireJson(string? json) =>
+            json ?? throw new HeroSignalException(HeroSignalException.InvalidResponse, "Köprü yanıtı boş.");
     }
 
     /// <summary>Push aboneliği (<c>HeroSignal.User.PushSubscription</c>).</summary>
