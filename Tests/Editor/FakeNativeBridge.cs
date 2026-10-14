@@ -69,6 +69,8 @@ namespace HeroSignalSdk.Tests
         }
 
         public void ClearAllNotifications() => Record("clearAll");
+        public void RemoveNotification(string id) => Record("removeNotification:" + id);
+        public void RemoveGroupedNotifications(string group) => Record("removeGrouped:" + group);
 
         public void SetForegroundHandlerEnabled(bool enabled)
         {

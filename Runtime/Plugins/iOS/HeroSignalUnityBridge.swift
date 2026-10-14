@@ -468,6 +468,20 @@ public func hs_request_permission(_ fallbackToSettings: Int32, _ requestId: Int3
 @_cdecl("hs_clear_all_notifications")
 public func hs_clear_all_notifications() { HeroSignal.Notifications.clearAll() }
 
+/// Tek bildirimi istek kimliğiyle (`UNNotificationRequest.identifier`) bildirim merkezinden kaldırır.
+@_cdecl("hs_remove_notification")
+public func hs_remove_notification(_ identifier: UnsafePointer<CChar>?) {
+    guard let id = hsuString(identifier), !id.isEmpty else { return }
+    HeroSignal.Notifications.removeNotification(identifier: id)
+}
+
+/// Aynı `thread-id`'ye sahip bildirimleri bildirim merkezinden kaldırır.
+@_cdecl("hs_remove_grouped_notifications")
+public func hs_remove_grouped_notifications(_ group: UnsafePointer<CChar>?) {
+    guard let threadId = hsuString(group), !threadId.isEmpty else { return }
+    HeroSignal.Notifications.removeGroupedNotifications(threadId)
+}
+
 @_cdecl("hs_set_foreground_handler_enabled")
 public func hs_set_foreground_handler_enabled(_ enabled: Int32) {
     let state = HSUnityBridgeState.shared

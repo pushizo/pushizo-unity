@@ -45,6 +45,10 @@ namespace HeroSignalSdk.Internal
         bool GetPermission();
         void RequestPermission(bool fallbackToSettings, Action<bool> completion);
         void ClearAllNotifications();
+        /// <summary>Tek bildirimi kaldırır. Android: tepsi kimliği (tamsayı metni); iOS: <c>UNNotificationRequest.identifier</c>.</summary>
+        void RemoveNotification(string id);
+        /// <summary>Android <c>android_group</c> / iOS <c>thread-id</c> grubundaki bildirimleri kaldırır.</summary>
+        void RemoveGroupedNotifications(string group);
 
         /// <summary>
         /// true: ön planda gelen bildirim yerelde ertelenir ve <c>foreground</c> olayı (<c>eventId</c> ile) üretilir;

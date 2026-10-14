@@ -319,6 +319,16 @@ public final class HeroSignalUnityBridge {
         HeroSignal.Notifications.clearAll();
     }
 
+    /** Tek bir HeroSignal bildirimini tepsi kimliğiyle (androidNotificationId) kaldırır. */
+    public static void removeNotification(int androidNotificationId) {
+        HeroSignal.Notifications.removeNotification(androidNotificationId);
+    }
+
+    /** Aynı grup anahtarına (android_group) sahip bildirimleri ve grup özetini kaldırır. */
+    public static void removeGroupedNotifications(String group) {
+        HeroSignal.Notifications.removeGroupedNotifications(group);
+    }
+
     // --- Ön plan ---
 
     /** true: ön planda gelen bildirim ertelenir ve C#'a sorulur (karar foregroundDisplay ile). */
@@ -596,6 +606,7 @@ public final class HeroSignalUnityBridge {
                 "messageId", n.getMessageId());
         put(o, "actions", actions);
         put(o, "data", new JSONObject(n.getData()));
+        put(o, "androidNotificationId", n.getAndroidNotificationId());
         return o;
     }
 

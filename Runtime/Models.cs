@@ -36,7 +36,7 @@ namespace HeroSignalSdk
     {
         internal HeroSignalNotification(
             string? title, string? body, string? imageUrl, string? url, string? deliveryId, string? messageId,
-            IReadOnlyList<NotificationAction> actions, IReadOnlyDictionary<string, string> data)
+            IReadOnlyList<NotificationAction> actions, IReadOnlyDictionary<string, string> data, int? androidNotificationId = null)
         {
             Title = title;
             Body = body;
@@ -46,6 +46,7 @@ namespace HeroSignalSdk
             MessageId = messageId;
             Actions = actions;
             Data = data;
+            AndroidNotificationId = androidNotificationId;
         }
 
         public string? Title { get; }
@@ -58,6 +59,10 @@ namespace HeroSignalSdk
         public IReadOnlyList<NotificationAction> Actions { get; }
         /// <summary>Müşteri verileri (<c>hs_</c> önekli alanlar hariç).</summary>
         public IReadOnlyDictionary<string, string> Data { get; }
+        /// <summary>
+        /// Yalnızca Android: tepsi kimliği (<see cref="NotificationsManager.RemoveNotification(int)"/> için); iOS'ta null.
+        /// </summary>
+        public int? AndroidNotificationId { get; }
     }
 
     /// <summary>Push aboneliği durumu.</summary>
