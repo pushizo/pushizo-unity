@@ -36,7 +36,8 @@ namespace HeroSignalSdk.Internal
         [DllImport("__Internal")] private static extern void hs_free(IntPtr p);
         [DllImport("__Internal")] private static extern void hs_start(byte[] appId, byte[] optionsJson, EventCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_consent_given(int given);
-        [DllImport("__Internal")] private static extern void hs_login(byte[] externalId, byte[]? identityHash);
+        [DllImport("__Internal")] private static extern IntPtr hs_login(byte[] externalId, byte[]? identityHash, byte[]? jwt);
+        [DllImport("__Internal")] private static extern IntPtr hs_update_user_jwt(byte[] jwt);
         [DllImport("__Internal")] private static extern void hs_logout();
         [DllImport("__Internal")] private static extern void hs_set_log_level(int level);
         [DllImport("__Internal")] private static extern IntPtr hs_external_id();
@@ -78,6 +79,8 @@ namespace HeroSignalSdk.Internal
         [DllImport("__Internal")] private static extern void hs_get_preferences(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_preferences(byte[] json, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue);
+        [DllImport("__Internal")] private static extern void hs_setup_default_live_activity(int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_start_default_live_activity(byte[] activityId, byte[] attributesJson, byte[] contentStateJson, int requestId, ResultCallback callback);
 
         private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value + "\0");
 
@@ -134,7 +137,10 @@ namespace HeroSignalSdk.Internal
 
         public void SetConsentGiven(bool given) => hs_set_consent_given(given ? 1 : 0);
 
-        public void Login(string externalId, string? identityHash) => hs_login(Utf8(externalId), Utf8OrNull(identityHash));
+        public string? Login(string externalId, string? identityHash, string? jwt) =>
+            Take(hs_login(Utf8(externalId), Utf8OrNull(identityHash), Utf8OrNull(jwt)));
+
+        public string? UpdateUserJwt(string jwt) => Take(hs_update_user_jwt(Utf8(jwt)));
 
         public void Logout() => hs_logout();
 
@@ -226,6 +232,14 @@ namespace HeroSignalSdk.Internal
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
             hs_send_event(Utf8(name), Utf8(propertiesJson), value, hasValue ? 1 : 0);
+
+        public bool SupportsLiveActivities => true;
+
+        public void SetupDefaultLiveActivity(NativeResult result) =>
+            hs_setup_default_live_activity(Register(s_results, result), s_resultCallback);
+
+        public void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result) =>
+            hs_start_default_live_activity(Utf8(activityId), Utf8(attributesJson), Utf8(contentStateJson), Register(s_results, result), s_resultCallback);
     }
 }
 #endif

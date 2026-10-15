@@ -40,7 +40,23 @@ namespace HeroSignalSdk.Tests
         }
 
         public void SetConsentGiven(bool given) => Record("consent:" + given);
-        public void Login(string externalId, string? identityHash) => Record("login:" + externalId + ":" + (identityHash ?? "<null>"));
+        /// <summary>Login yanıtı (yerel köprünün döndürdüğü kanıt hatası; null = başarı).</summary>
+        public string? LoginError { get; set; }
+
+        /// <summary>UpdateUserJwt yanıtı (ör. giriş yapılmamış; null = başarı).</summary>
+        public string? UpdateUserJwtError { get; set; }
+
+        public string? Login(string externalId, string? identityHash, string? jwt)
+        {
+            Record("login:" + externalId + ":" + (identityHash ?? "<null>") + (jwt == null ? "" : ":jwt=" + jwt));
+            return LoginError;
+        }
+
+        public string? UpdateUserJwt(string jwt)
+        {
+            Record("updateUserJwt:" + jwt);
+            return UpdateUserJwtError;
+        }
         public void Logout() => Record("logout");
         public void SetLogLevel(int level) => Record("logLevel:" + level);
         public string? GetExternalId() => ExternalIdValue;
@@ -114,6 +130,24 @@ namespace HeroSignalSdk.Tests
             LastEventJson = propertiesJson;
             LastEventHasValue = hasValue;
         }
+
+        /// <summary>false: Android köprüsü gibi Live Activities desteklenmez.</summary>
+        public bool SupportsLiveActivities { get; set; } = true;
+
+        /// <summary>Live Activities hata yanıtı (null = başarı).</summary>
+        public string? LiveActivityErrorCode { get; set; }
+        public string? LiveActivityErrorMessage { get; set; }
+
+        private void RespondLiveActivity(string call, NativeResult result)
+        {
+            Record(call);
+            result(null, LiveActivityErrorCode, LiveActivityErrorMessage);
+        }
+
+        public void SetupDefaultLiveActivity(NativeResult result) => RespondLiveActivity("setupDefaultLiveActivity", result);
+
+        public void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result) =>
+            RespondLiveActivity("startDefaultLiveActivity:" + activityId + ":" + attributesJson + ":" + contentStateJson, result);
     }
 
     /// <summary>Testlerde olaylar çağıran iş parçacığında hemen çalışır.</summary>

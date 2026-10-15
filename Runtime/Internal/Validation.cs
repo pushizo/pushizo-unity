@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -116,6 +117,71 @@ namespace HeroSignalSdk.Internal
         {
             if (limit < 1 || limit > 200) throw new ArgumentOutOfRangeException(paramName, limit, "limit 1-200 olmalı.");
         }
+
+        // \z: .NET'te $ sondaki satır sonunu da kabul eder.
+        private static readonly Regex LiveActivityIdRegex = new Regex(@"^[A-Za-z0-9_.:-]{1,100}\z", RegexOptions.CultureInvariant);
+
+        /// <summary>Live Activity alan anahtarı üst sınırı (yerel SDK ve sunucu).</summary>
+        public const int MaxLiveActivityKeyLength = 64;
+
+        /// <summary>Live Activity metin değeri üst sınırı (yerel SDK ve sunucu).</summary>
+        public const int MaxLiveActivityStringLength = 4000;
+
+        /// <summary>Etkinlik kimliği: 1-100 karakter; harf, rakam ve <c>_ . : -</c> (sunucu start kuralı).</summary>
+        public static string RequireLiveActivityId(string activityId) =>
+            activityId != null && LiveActivityIdRegex.IsMatch(activityId)
+                ? activityId
+                : throw InvalidLiveActivity("activityId 1-100 karakter olmalı (harf, rakam ve _ . : -).");
+
+        /// <summary>
+        /// Live Activity alanlarını doğrular ve normalize eder: anahtar 1-64 karakter, değer metin (en çok 4000 karakter),
+        /// sonlu sayı (tam sayılar long, diğerleri double) veya bool. <paramref name="reserveHeroSignalKey"/> true ise
+        /// (<c>attributes</c>) <c>herosignal</c> anahtarı sunucu verisi için ayrılmıştır. Hata: <c>INVALID_ARGUMENT</c>.
+        /// </summary>
+        public static Dictionary<string, object?> NormalizeLiveActivityValues(IDictionary<string, object> values, string paramName, bool reserveHeroSignalKey)
+        {
+            if (values is null) throw InvalidLiveActivity($"{paramName} gerekli.");
+            var result = new Dictionary<string, object?>(values.Count, StringComparer.Ordinal);
+            foreach (var pair in values)
+            {
+                if (string.IsNullOrEmpty(pair.Key) || pair.Key.Length > MaxLiveActivityKeyLength)
+                    throw InvalidLiveActivity($"{paramName} anahtarları 1-{MaxLiveActivityKeyLength} karakter olmalı.");
+                if (reserveHeroSignalKey && pair.Key == "herosignal")
+                    throw InvalidLiveActivity($"{paramName} içinde 'herosignal' anahtarı ayrılmıştır.");
+                result[pair.Key] = NormalizeLiveActivityValue(pair.Value) ??
+                    throw InvalidLiveActivity($"{paramName}[\"{pair.Key}\"] metin (en çok {MaxLiveActivityStringLength} karakter), sonlu sayı veya bool olmalı.");
+            }
+            return result;
+        }
+
+        private static object? NormalizeLiveActivityValue(object? value)
+        {
+            switch (value)
+            {
+                case string s: return s.Length <= MaxLiveActivityStringLength ? s : null;
+                case bool b: return b;
+                case sbyte _:
+                case byte _:
+                case short _:
+                case ushort _:
+                case int _:
+                case uint _:
+                case long _:
+                    return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                case ulong u: return u <= long.MaxValue ? (object)(long)u : (double)u;
+                // float, en kısa ondalık gösterimiyle çevrilir (0.1f → 0.1; doğrudan dönüşüm 0.10000000149… verir).
+                case float f:
+                    return float.IsNaN(f) || float.IsInfinity(f)
+                        ? null
+                        : (object)double.Parse(f.ToString("R", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+                case double d: return double.IsNaN(d) || double.IsInfinity(d) ? null : (object)d;
+                case decimal m: return (double)m;
+                default: return null;
+            }
+        }
+
+        private static HeroSignalException InvalidLiveActivity(string message) =>
+            new HeroSignalException(HeroSignalException.InvalidArgument, message);
 
         public const int MaxPreferencesPerRequest = 100;
 

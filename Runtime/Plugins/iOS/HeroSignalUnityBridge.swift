@@ -363,10 +363,26 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
 @_cdecl("hs_set_consent_given")
 public func hs_set_consent_given(_ given: Int32) { HeroSignal.setConsentGiven(given != 0) }
 
+/// Kanıt app'in kimlik doğrulama kipine uymuyorsa hata mesajı döner (giriş yapılmaz); başarıda nil. C# `hs_free` ile serbest bırakır.
 @_cdecl("hs_login")
-public func hs_login(_ externalId: UnsafePointer<CChar>?, _ identityHash: UnsafePointer<CChar>?) {
-    guard let id = hsuNonEmpty(externalId) else { return }
-    HeroSignal.login(id, identityHash: hsuNonEmpty(identityHash))
+public func hs_login(_ externalId: UnsafePointer<CChar>?, _ identityHash: UnsafePointer<CChar>?, _ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let id = hsuNonEmpty(externalId) else { return hsuDup("externalId gerekli") }
+    let hash = hsuNonEmpty(identityHash), token = hsuNonEmpty(jwt)
+    if let message = HeroSignal.loginProofError(identityHash: hash, jwt: token) { return hsuDup(message) }
+    HeroSignal.login(id, identityHash: hash, jwt: token)
+    return nil
+}
+
+/// Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda nil.
+@_cdecl("hs_update_user_jwt")
+public func hs_update_user_jwt(_ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let token = hsuNonEmpty(jwt) else { return hsuDup("jwt gerekli") }
+    do {
+        try HeroSignal.updateUserJwt(token)
+        return nil
+    } catch {
+        return hsuDup("Önce login ile kullanıcı kimliklendirilmeli")
+    }
 }
 
 @_cdecl("hs_logout")
@@ -600,4 +616,42 @@ public func hs_send_event(_ name: UnsafePointer<CChar>?, _ propertiesJson: Unsaf
     guard let eventName = hsuNonEmpty(name) else { return }
     let properties = (hsuJsonObject(propertiesJson) as? [String: Any]) ?? [:]
     HeroSignal.Session.sendEvent(eventName, properties: properties, value: hasValue != 0 ? value : nil)
+}
+
+// MARK: - Live Activities (ADR-0024)
+
+/// Live Activities çağrısını ana iş parçacığında (ActivityKit) çalıştırır; `HSLiveActivityError` kodu ve mesajı aynen,
+/// diğer hatalar `LIVE_ACTIVITY_FAILED` olarak iletilir. Başarı JSON'u nil.
+private func hsuLiveActivity(_ requestId: Int32, _ callback: HSUResultCallback?, _ body: @escaping () throws -> Void) {
+    hsuOnMain {
+        do {
+            try body()
+            hsuReply(callback, requestId, nil, nil, nil)
+        } catch let error as HSLiveActivityError {
+            hsuReply(callback, requestId, nil, error.code, error.message)
+        } catch {
+            hsuReply(callback, requestId, nil, "LIVE_ACTIVITY_FAILED", error.localizedDescription)
+        }
+    }
+}
+
+/// Genel `HeroSignalDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start iOS 17.2+, güncelleme belirteçleri).
+@_cdecl("hs_setup_default_live_activity")
+public func hs_setup_default_live_activity(_ requestId: Int32, _ callback: HSUResultCallback?) {
+    hsuLiveActivity(requestId, callback) { try HeroSignal.LiveActivities.setupDefaultLiveActivity() }
+}
+
+/// Genel türle yerel etkinlik başlatır (iOS 16.1+). attributesJson/contentStateJson: düz JSON nesnesi (metin, sayı,
+/// mantıksal değer); doğrulama yerel SDK'dadır. C dizgeleri çağrı süresince geçerli olduğundan hemen çözülür.
+@_cdecl("hs_start_default_live_activity")
+public func hs_start_default_live_activity(_ activityId: UnsafePointer<CChar>?, _ attributesJson: UnsafePointer<CChar>?, _ contentStateJson: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let id = hsuString(activityId) ?? ""
+    guard let attributes = hsuJsonObject(attributesJson) as? [String: Any],
+          let contentState = hsuJsonObject(contentStateJson) as? [String: Any] else {
+        hsuReply(callback, requestId, nil, "INVALID_ARGUMENT", "attributes ve contentState JSON nesnesi olmalı")
+        return
+    }
+    hsuLiveActivity(requestId, callback) {
+        try HeroSignal.LiveActivities.startDefaultLiveActivity(activityId: id, attributes: attributes, contentState: contentState)
+    }
 }

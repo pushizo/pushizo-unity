@@ -22,7 +22,11 @@ namespace HeroSignalSdk.Internal
         void Start(string appId, string optionsJson, Action<string, string> onEvent);
 
         void SetConsentGiven(bool given);
-        void Login(string externalId, string? identityHash);
+        /// <summary>Kanıt app'in kimlik doğrulama kipine uymuyorsa hata mesajı döner (giriş yapılmaz); başarıda null.</summary>
+        string? Login(string externalId, string? identityHash, string? jwt);
+
+        /// <summary>Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda null.</summary>
+        string? UpdateUserJwt(string jwt);
         void Logout();
         void SetLogLevel(int level);
         string? GetExternalId();
@@ -82,5 +86,23 @@ namespace HeroSignalSdk.Internal
         /// </summary>
         void SetPreferences(string preferencesJson, NativeResult result);
         void SendEvent(string name, string propertiesJson, double value, bool hasValue);
+
+        /// <summary>
+        /// Yerel SDK'da Live Activities var mı (yalnızca iOS). false ise <see cref="LiveActivitiesManager"/> çağrıları köprüye
+        /// iletmeden <c>PLATFORM_NOT_SUPPORTED</c> ile reddeder.
+        /// </summary>
+        bool SupportsLiveActivities { get; }
+
+        /// <summary>
+        /// Genel <c>HeroSignalDefaultLiveActivityAttributes</c> türünü izlemeye alır. Başarı JSON'u: null; hata kodları
+        /// <c>PLATFORM_NOT_SUPPORTED</c> | <c>NOT_READY</c> | <c>INVALID_ARGUMENT</c> | <c>LIVE_ACTIVITY_FAILED</c>.
+        /// </summary>
+        void SetupDefaultLiveActivity(NativeResult result);
+
+        /// <summary>
+        /// Genel türle yerel etkinlik başlatır. <paramref name="attributesJson"/> / <paramref name="contentStateJson"/>: düz
+        /// JSON nesnesi (değerler metin, sayı, bool). Başarı JSON'u: null; hata kodları <see cref="SetupDefaultLiveActivity"/> ile aynı.
+        /// </summary>
+        void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result);
     }
 }

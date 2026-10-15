@@ -7,7 +7,7 @@ namespace HeroSignalSdk.Internal
     /// <summary>
     /// Unity Editor ve yerel SDK'sı olmayan platformlar (Standalone, WebGL…) için köprü: ağ çağrısı ve push yoktur.
     /// Çağrılar günlüğe yazılır (değerler değil, yalnızca işlem adı); tag, trigger, e-posta/SMS ve kimlik bellekte
-    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin. İzin isteği false, bildirim kutusu ve tercihler
+    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin. İzin isteği false, bildirim kutusu, tercihler ve Live Activities
     /// <see cref="HeroSignalException.PlatformNotSupported"/> döndürür.
     /// </summary>
     internal sealed class EditorNativeBridge : INativeBridge
@@ -29,10 +29,21 @@ namespace HeroSignalSdk.Internal
 
         public void SetConsentGiven(bool given) => Log("SetConsentGiven");
 
-        public void Login(string externalId, string? identityHash)
+        public string? Login(string externalId, string? identityHash, string? jwt)
         {
             lock (_gate) _externalId = externalId;
             Log("Login");
+            return null;
+        }
+
+        public string? UpdateUserJwt(string jwt)
+        {
+            lock (_gate)
+            {
+                if (_externalId == null) return "Önce login ile kullanıcı kimliklendirilmeli";
+            }
+            Log("UpdateUserJwt");
+            return null;
         }
 
         public void Logout()
@@ -220,5 +231,16 @@ namespace HeroSignalSdk.Internal
         }
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) => Log("SendEvent");
+
+        /// <summary>Live Activities iOS'a özgüdür; Editor'de çağrılar köprüye ulaşmadan <c>PLATFORM_NOT_SUPPORTED</c> olur.</summary>
+        public bool SupportsLiveActivities => false;
+
+        public void SetupDefaultLiveActivity(NativeResult result) => LiveActivitiesNotSupported(result);
+
+        public void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result) =>
+            LiveActivitiesNotSupported(result);
+
+        private static void LiveActivitiesNotSupported(NativeResult result) =>
+            result(null, HeroSignalException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
     }
 }
