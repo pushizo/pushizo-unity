@@ -148,6 +148,26 @@ namespace HeroSignalSdk.Tests
 
         public void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result) =>
             RespondLiveActivity("startDefaultLiveActivity:" + activityId + ":" + attributesJson + ":" + contentStateJson, result);
+
+        /// <summary>Yerel SDK'nın kalıcı konum tercihi.</summary>
+        public bool LocationSharedValue { get; set; }
+
+        /// <summary>Konum izni isteğinin sonucu.</summary>
+        public bool LocationPermissionResult { get; set; } = true;
+
+        public bool GetLocationShared() => LocationSharedValue;
+
+        public void SetLocationShared(bool shared)
+        {
+            LocationSharedValue = shared;
+            Record("locationShared:" + shared);
+        }
+
+        public void RequestLocationPermission(string? rationale, Action<bool> completion)
+        {
+            Record("requestLocationPermission:" + (rationale ?? "<null>"));
+            completion(LocationPermissionResult);
+        }
     }
 
     /// <summary>Testlerde olaylar çağıran iş parçacığında hemen çalışır.</summary>

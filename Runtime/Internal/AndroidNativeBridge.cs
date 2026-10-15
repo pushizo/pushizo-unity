@@ -151,6 +151,17 @@ namespace HeroSignalSdk.Internal
         private static void LiveActivitiesNotSupported(NativeResult result) =>
             result(null, HeroSignalException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
 
+        public bool GetLocationShared() => Call<bool>("locationShared");
+
+        public void SetLocationShared(bool shared) => Call("setLocationShared", shared);
+
+        /// <summary>Açıklama diyaloğu ve sistem izni Java köprüsündedir; sonuç etkinlik ön plana döndüğünde gelir.</summary>
+        public void RequestLocationPermission(string? rationale, Action<bool> completion)
+        {
+            using var activity = CurrentActivity();
+            Call("requestLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
+        }
+
         /// <summary><c>HeroSignalUnityListener</c>; yerel iş parçacığından çağrılır (ana iş parçacığına HeroSignal taşır).</summary>
         private sealed class EventListener : AndroidJavaProxy
         {

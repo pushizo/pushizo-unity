@@ -655,3 +655,24 @@ public func hs_start_default_live_activity(_ activityId: UnsafePointer<CChar>?, 
         try HeroSignal.LiveActivities.startDefaultLiveActivity(activityId: id, attributes: attributes, contentState: contentState)
     }
 }
+
+// MARK: - Konum (v2 Faz 17b; yalnızca ön plan)
+
+/// Paylaşım açık mı (yerel SDK'nın kalıcı tercihi; izin durumundan bağımsız).
+@_cdecl("hs_location_is_shared")
+public func hs_location_is_shared() -> Int32 { HeroSignal.Location.isShared ? 1 : 0 }
+
+/// Paylaşımı açar/kapatır; kapatınca yerel SDK sunucuya `location: null` gönderir (konum ve rıza kaydı silinir).
+@_cdecl("hs_location_set_shared")
+public func hs_location_set_shared(_ shared: Int32) { HeroSignal.Location.setShared(shared != 0) }
+
+/// "Kullanırken" konum iznini ister: önce açıklama uyarısı (rationale boşsa SDK'nın varsayılan metni), sonra sistem
+/// istemi. Sonuç ana iş parçacığında: izin var/verildiyse 1; reddedilmiş/kısıtlı veya Info.plist'te
+/// `NSLocationWhenInUseUsageDescription` yoksa 0. C dizgesi çağrı süresince geçerli olduğundan hemen kopyalanır.
+@_cdecl("hs_location_request_permission")
+public func hs_location_request_permission(_ rationale: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUPermissionCallback?) {
+    let text = hsuNonEmpty(rationale)
+    HeroSignal.Location.requestPermission(rationale: text) { granted in
+        callback?(requestId, granted ? 1 : 0)
+    }
+}

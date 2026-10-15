@@ -40,6 +40,7 @@ namespace HeroSignalSdk
         public static InboxManager Inbox { get; } = new InboxManager();
         public static SessionManager Session { get; } = new SessionManager();
         public static LiveActivitiesManager LiveActivities { get; } = new LiveActivitiesManager();
+        public static LocationManager Location { get; } = new LocationManager();
         public static DebugManager Debug { get; } = new DebugManager();
 
         /// <summary>
@@ -156,15 +157,19 @@ namespace HeroSignalSdk
             return tcs.Task;
         }
 
-        /// <summary>Yerel izin sonucunu ana iş parçacığına taşır.</summary>
-        internal static Task<bool> RequestPermission(bool fallbackToSettings)
+        /// <summary>Yerel bildirim izni sonucunu ana iş parçacığına taşır.</summary>
+        internal static Task<bool> RequestPermission(bool fallbackToSettings) =>
+            CallBool((bridge, done) => bridge.RequestPermission(fallbackToSettings, done));
+
+        /// <summary>Yerel bool sonucunu (izin istekleri) ana iş parçacığında tamamlanan Task'a çevirir.</summary>
+        internal static Task<bool> CallBool(Action<INativeBridge, Action<bool>> invoke)
         {
             var bridge = Bridge();
             var dispatcher = s_dispatcher!;
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             try
             {
-                bridge.RequestPermission(fallbackToSettings, granted => dispatcher.Post(() => tcs.TrySetResult(granted)));
+                invoke(bridge, granted => dispatcher.Post(() => tcs.TrySetResult(granted)));
             }
             catch (Exception e)
             {

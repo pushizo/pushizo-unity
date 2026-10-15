@@ -7,8 +7,8 @@ namespace HeroSignalSdk.Internal
     /// <summary>
     /// Unity Editor ve yerel SDK'sı olmayan platformlar (Standalone, WebGL…) için köprü: ağ çağrısı ve push yoktur.
     /// Çağrılar günlüğe yazılır (değerler değil, yalnızca işlem adı); tag, trigger, e-posta/SMS ve kimlik bellekte
-    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin. İzin isteği false, bildirim kutusu, tercihler ve Live Activities
-    /// <see cref="HeroSignalException.PlatformNotSupported"/> döndürür.
+    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin; konum paylaşım tercihi de bellekte tutulur. Bildirim ve konum izni
+    /// istekleri false, bildirim kutusu, tercihler ve Live Activities <see cref="HeroSignalException.PlatformNotSupported"/> döndürür.
     /// </summary>
     internal sealed class EditorNativeBridge : INativeBridge
     {
@@ -19,6 +19,7 @@ namespace HeroSignalSdk.Internal
         private readonly List<string> _sms = new List<string>();
         private string? _externalId;
         private bool _paused;
+        private bool _locationShared;
 
         public bool IsNative => false;
 
@@ -242,5 +243,24 @@ namespace HeroSignalSdk.Internal
 
         private static void LiveActivitiesNotSupported(NativeResult result) =>
             result(null, HeroSignalException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
+
+        /// <summary>Konum tercihi yalnızca bellekte tutulur; konum okunmaz ve gönderilmez.</summary>
+        public bool GetLocationShared()
+        {
+            lock (_gate) return _locationShared;
+        }
+
+        public void SetLocationShared(bool shared)
+        {
+            lock (_gate) _locationShared = shared;
+            Log("Location.SetShared");
+        }
+
+        /// <summary>Editor'de konum izni yoktur; sonuç her zaman false.</summary>
+        public void RequestLocationPermission(string? rationale, Action<bool> completion)
+        {
+            Log("Location.RequestPermission");
+            completion(false);
+        }
     }
 }
