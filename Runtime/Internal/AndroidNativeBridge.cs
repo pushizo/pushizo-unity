@@ -42,7 +42,10 @@ namespace HeroSignalSdk.Internal
 
         public void SetConsentGiven(bool given) => Call("setConsentGiven", given);
 
-        public void Login(string externalId, string? identityHash) => Call("login", externalId, Text(identityHash));
+        public string? Login(string externalId, string? identityHash, string? jwt) =>
+            NullIfEmpty(Call<string>("login", externalId, Text(identityHash), Text(jwt)));
+
+        public string? UpdateUserJwt(string jwt) => NullIfEmpty(Call<string>("updateUserJwt", jwt));
 
         public void Logout() => Call("logout");
 
@@ -136,6 +139,17 @@ namespace HeroSignalSdk.Internal
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
             Call("sendEvent", name, propertiesJson, value, hasValue);
+
+        /// <summary>Live Activities iOS'a özgüdür; Android'de çağrılar köprüye ulaşmadan <c>PLATFORM_NOT_SUPPORTED</c> olur.</summary>
+        public bool SupportsLiveActivities => false;
+
+        public void SetupDefaultLiveActivity(NativeResult result) => LiveActivitiesNotSupported(result);
+
+        public void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result) =>
+            LiveActivitiesNotSupported(result);
+
+        private static void LiveActivitiesNotSupported(NativeResult result) =>
+            result(null, HeroSignalException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
 
         /// <summary><c>HeroSignalUnityListener</c>; yerel iş parçacığından çağrılır (ana iş parçacığına HeroSignal taşır).</summary>
         private sealed class EventListener : AndroidJavaProxy

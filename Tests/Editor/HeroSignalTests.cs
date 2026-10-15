@@ -364,12 +364,150 @@ namespace HeroSignalSdk.Tests
         }
 
         [Test]
+        public void Jwt_identity_verification_reaches_bridge_and_surfaces_errors()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            HeroSignal.Login("user_42", jwt: "a.b.c");
+            HeroSignal.Login("user_43", "hash_abc", "a.b.c");
+            HeroSignal.Login("user_44", jwt: " ");
+            HeroSignal.UpdateUserJwt("d.e.f");
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "login:user_42:<null>:jwt=a.b.c",
+                "login:user_43:hash_abc:jwt=a.b.c",
+                "login:user_44:<null>",
+                "updateUserJwt:d.e.f",
+            }, _bridge.Calls);
+            Assert.Throws<ArgumentException>(() => HeroSignal.UpdateUserJwt(""));
+
+            // Yerel SDK kanıtı app kipine uygun bulmazsa veya kullanıcı yoksa hata NOT_READY olarak yansır.
+            _bridge.LoginError = "Bu app için kimlik JWT'si zorunlu.";
+            var login = Assert.Throws<HeroSignalException>(() => HeroSignal.Login("user_45", "hash_abc"));
+            Assert.AreEqual(HeroSignalException.NotReady, login.Code);
+            Assert.AreEqual("Bu app için kimlik JWT'si zorunlu.", login.Message);
+            _bridge.UpdateUserJwtError = "Önce login ile kullanıcı kimliklendirilmeli";
+            Assert.AreEqual(HeroSignalException.NotReady, Assert.Throws<HeroSignalException>(() => HeroSignal.UpdateUserJwt("g.h.i")).Code);
+        }
+
+        private static Dictionary<string, object> LiveValues(params (string Key, object Value)[] pairs)
+        {
+            var map = new Dictionary<string, object>();
+            foreach (var (key, value) in pairs) map[key] = value;
+            return map;
+        }
+
+        private static string FaultCode(System.Threading.Tasks.Task task)
+        {
+            Assert.IsTrue(task.IsFaulted);
+            return ((HeroSignalException)task.Exception!.InnerException!).Code;
+        }
+
+        [Test]
+        public void Live_activities_reach_bridge_as_flat_json()
+        {
+            Init();
+            _bridge.Calls.Clear();
+
+            Assert.IsTrue(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync().IsCompleted);
+            var start = HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
+                "order:42",
+                LiveValues(("title", "Sipariş"), ("count", 3), ("big", 5000000000L), ("ratio", 0.1f), ("price", 12.5m), ("vip", true)),
+                LiveValues(("status", "yolda"), ("eta", 15.5)));
+            Assert.IsTrue(start.IsCompleted);
+            Assert.IsFalse(start.IsFaulted);
+
+            Assert.AreEqual("setupDefaultLiveActivity", _bridge.Calls[0]);
+            Assert.AreEqual(
+                @"startDefaultLiveActivity:order:42:{""title"":""Sipariş"",""count"":3,""big"":5000000000,""ratio"":0.1,""price"":12.5,""vip"":true}:{""status"":""yolda"",""eta"":15.5}",
+                _bridge.Calls[1]);
+            Assert.AreEqual("HeroSignalDefaultLiveActivityAttributes", LiveActivitiesManager.DefaultActivityType);
+        }
+
+        [Test]
+        public void Live_activities_validate_before_bridge()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            var empty = new Dictionary<string, object>();
+            var invalid = new List<Func<System.Threading.Tasks.Task>>
+            {
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("", empty, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(null!, empty, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(new string('a', 101), empty, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("sipariş", empty, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("order 1", empty, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("order\n", empty, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", null!, empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, null!),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("herosignal", "x")), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("", "x")), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues((new string('k', 65), "x")), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("t", new string('x', 4001))), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("nested", new Dictionary<string, object>())), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("list", new[] { 1, 2 })), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("when", DateTime.UtcNow)), empty),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, LiveValues(("eta", double.NaN))),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, LiveValues(("eta", float.PositiveInfinity))),
+                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, new Dictionary<string, object> { ["eta"] = null! }),
+            };
+            foreach (var call in invalid) Assert.AreEqual(HeroSignalException.InvalidArgument, FaultCode(call()));
+            Assert.IsEmpty(_bridge.Calls);
+
+            // herosignal yalnızca attributes içinde ayrılmıştır; sınır değerleri kabul edilir.
+            Assert.IsFalse(HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("Order_1.a:b-c", empty, LiveValues(("herosignal", "x"))).IsFaulted);
+            Assert.IsFalse(HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
+                new string('a', 100), LiveValues((new string('k', 64), new string('x', 4000))), empty).IsFaulted);
+            Assert.AreEqual(2, _bridge.Calls.Count);
+        }
+
+        [Test]
+        public void Live_activity_native_errors_keep_code_and_message()
+        {
+            Init();
+            _bridge.LiveActivityErrorCode = HeroSignalException.LiveActivityFailed;
+            _bridge.LiveActivityErrorMessage = "Live Activities bu cihazda kapalı";
+            var start = HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>());
+            Assert.AreEqual("LIVE_ACTIVITY_FAILED", FaultCode(start));
+            Assert.AreEqual("Live Activities bu cihazda kapalı", start.Exception!.InnerException!.Message);
+
+            _bridge.LiveActivityErrorCode = HeroSignalException.NotReady;
+            _bridge.LiveActivityErrorMessage = "HeroSignal.initialize çağrılmadı";
+            Assert.AreEqual(HeroSignalException.NotReady, FaultCode(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync()));
+        }
+
+        [Test]
+        public void Live_activities_on_android_report_platform_not_supported_without_native_call()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            _bridge.SupportsLiveActivities = false;
+
+            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync()));
+            var start = HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("title", "x")), LiveValues(("status", "y")));
+            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(start));
+            Assert.AreEqual("Live Activities yalnızca iOS'ta desteklenir.", start.Exception!.InnerException!.Message);
+            Assert.IsEmpty(_bridge.Calls);
+        }
+
+        [Test]
+        public void Live_activities_before_initialize_throw()
+        {
+            Assert.Throws<InvalidOperationException>(() => HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync());
+            Assert.Throws<InvalidOperationException>(() =>
+                HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>()));
+        }
+
+        [Test]
         public void Editor_bridge_simulates_state_without_native_sdk()
         {
             HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
             Init();
             Assert.IsFalse(HeroSignal.IsSupported);
+            Assert.Throws<HeroSignalException>(() => HeroSignal.UpdateUserJwt("a.b.c"));
             HeroSignal.Login("user_1");
+            HeroSignal.UpdateUserJwt("a.b.c");
             HeroSignal.User.AddTags(new Dictionary<string, string> { ["plan"] = "pro" });
             HeroSignal.User.AddEmail("ali@example.com");
             HeroSignal.InAppMessages.AddTrigger("level", "gold");
@@ -385,6 +523,9 @@ namespace HeroSignalSdk.Tests
             Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)preferences.Exception!.InnerException!).Code);
             var setPreferences = HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true) });
             Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)setPreferences.Exception!.InnerException!).Code);
+            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync()));
+            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
+                "a1", LiveValues(("title", "x")), LiveValues(("status", "y")))));
         }
     }
 }

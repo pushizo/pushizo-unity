@@ -183,8 +183,28 @@ public final class HeroSignalUnityBridge {
 
     public static void setConsentGiven(boolean given) { HeroSignal.setConsentGiven(given); }
 
-    /** identityHash boşsa yok sayılır (Unity JNI çağrıları null metin geçiremez). */
-    public static void login(String externalId, String identityHash) { HeroSignal.login(externalId, emptyToNull(identityHash)); }
+    /**
+     * identityHash/jwt boşsa yok sayılır (Unity JNI çağrıları null metin geçiremez). Kanıt app'in kimlik doğrulama kipine
+     * uymuyorsa hata mesajı döner (giriş yapılmaz); başarıda null.
+     */
+    public static String login(String externalId, String identityHash, String jwt) {
+        try {
+            HeroSignal.login(externalId, emptyToNull(identityHash), emptyToNull(jwt));
+            return null;
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return e.getMessage() != null ? e.getMessage() : "kimlik doğrulama hatası";
+        }
+    }
+
+    /** Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda null. */
+    public static String updateUserJwt(String jwt) {
+        try {
+            HeroSignal.updateUserJwt(jwt);
+            return null;
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return e.getMessage() != null ? e.getMessage() : "kimlik doğrulama hatası";
+        }
+    }
 
     public static void logout() { HeroSignal.logout(); }
 

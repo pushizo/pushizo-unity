@@ -476,6 +476,68 @@ namespace HeroSignalSdk
         }
     }
 
+    /// <summary>
+    /// iOS Live Activities (<c>HeroSignal.LiveActivities</c>, ADR-0024). Köprü, genel
+    /// <c>HeroSignalDefaultLiveActivityAttributes</c> türünü kullanır; sunucuda (dashboard/API) tür adı
+    /// <see cref="DefaultActivityType"/> olarak tanımlanır ve widget extension'da
+    /// <c>ActivityConfiguration(for: HeroSignalDefaultLiveActivityAttributes.self)</c> yazılır. Android ve Editor'de
+    /// çağrılar <see cref="HeroSignalException"/> (<c>PLATFORM_NOT_SUPPORTED</c>) ile sonuçlanır. Sonuçlar ana iş
+    /// parçacığında teslim edilir.
+    /// </summary>
+    public sealed class LiveActivitiesManager
+    {
+        /// <summary>Genel türün sunucudaki adı.</summary>
+        public const string DefaultActivityType = "HeroSignalDefaultLiveActivityAttributes";
+
+        /// <summary>Live Activities iOS'a özgüdür (Android ve Editor'de aynı hata).</summary>
+        internal const string UnsupportedMessage = "Live Activities yalnızca iOS'ta desteklenir.";
+
+        internal LiveActivitiesManager()
+        {
+        }
+
+        /// <summary>
+        /// Genel türü izlemeye alır: push-to-start belirteci (iOS 17.2+) ve başlayan her etkinliğin güncelleme belirteci
+        /// sunucuya kaydedilir. <see cref="HeroSignal.Initialize"/>'dan sonra, uygulama her açıldığında çağrılmalıdır.
+        /// Hata: <c>PLATFORM_NOT_SUPPORTED</c> (iOS 16.1 öncesi, Android, Editor), <c>NOT_READY</c> (yerel SDK başlatılmadı).
+        /// </summary>
+        public Task SetupDefaultLiveActivityAsync()
+        {
+            var bridge = HeroSignal.Bridge();
+            if (!bridge.SupportsLiveActivities) return NotSupported();
+            return HeroSignal.Call<object?>(r => bridge.SetupDefaultLiveActivity(r), _ => null);
+        }
+
+        /// <summary>
+        /// Genel türle yerel bir etkinlik başlatır (iOS 16.1+); sunucu sonraki <c>update</c>/<c>end</c> çağrılarını
+        /// <paramref name="activityId"/> ile yapar. Değerler metin (en çok 4000 karakter), sonlu sayı veya bool; anahtarlar
+        /// 1-64 karakter; <paramref name="attributes"/> içinde <c>herosignal</c> anahtarı ayrılmıştır. Widget'ta değerler
+        /// <c>context.attributes.data["…"]</c> ve <c>context.state.data["…"]</c> ile okunur. Hata: <c>INVALID_ARGUMENT</c>,
+        /// <c>PLATFORM_NOT_SUPPORTED</c>, <c>NOT_READY</c>, <c>LIVE_ACTIVITY_FAILED</c> (Live Activities kapalı vb.).
+        /// </summary>
+        public Task StartDefaultLiveActivityAsync(string activityId, IDictionary<string, object> attributes, IDictionary<string, object> contentState)
+        {
+            var bridge = HeroSignal.Bridge();
+            string id, attributesJson, contentStateJson;
+            try
+            {
+                id = Validation.RequireLiveActivityId(activityId);
+                attributesJson = Json.Serialize(Validation.NormalizeLiveActivityValues(attributes, nameof(attributes), reserveHeroSignalKey: true));
+                contentStateJson = Json.Serialize(Validation.NormalizeLiveActivityValues(contentState, nameof(contentState), reserveHeroSignalKey: false));
+            }
+            catch (HeroSignalException e)
+            {
+                // Tüm Live Activity hataları (yerel SDK'dan gelenlerle aynı biçimde) Task üzerinden iletilir.
+                return Task.FromException(e);
+            }
+            if (!bridge.SupportsLiveActivities) return NotSupported();
+            return HeroSignal.Call<object?>(r => bridge.StartDefaultLiveActivity(id, attributesJson, contentStateJson, r), _ => null);
+        }
+
+        private static Task NotSupported() =>
+            Task.FromException(new HeroSignalException(HeroSignalException.PlatformNotSupported, UnsupportedMessage));
+    }
+
     /// <summary>Hata ayıklama (<c>HeroSignal.Debug</c>).</summary>
     public sealed class DebugManager
     {
