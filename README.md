@@ -9,7 +9,7 @@ plan 06 §6.1 (eski sağlayıcı v5 ile uyumlu), Flutter eklentisi ve .NET MAUI 
 |----------|----------|
 | Android cihaz (minSdk 23) | Yerel Android SDK'sı; Java köprüsü `Runtime/Plugins/Android` |
 | iOS cihaz (iOS 15+) | Yerel iOS SDK'sı; Swift köprüsü `Runtime/Plugins/iOS` (`[DllImport("__Internal")]`) |
-| Unity Editor, Standalone, WebGL | Ağ çağrısı ve push yok; çağrılar günlüğe yazılır, tag/trigger/e-posta bellekte tutulur, bildirim kutusu ve tercihler `PLATFORM_NOT_SUPPORTED` |
+| Unity Editor, Standalone, WebGL | Ağ çağrısı ve push yok; çağrılar günlüğe yazılır, tag/trigger/e-posta ve konum tercihi bellekte tutulur, izin istekleri `false`, bildirim kutusu ve tercihler `PLATFORM_NOT_SUPPORTED` |
 
 Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](https://github.com/googlesamples/unity-jar-resolver)
 (Android Gradle ve iOS CocoaPods bağımlılıkları için), iOS için CocoaPods.
@@ -193,6 +193,45 @@ await HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
   eksik vb.). Sonuçlar ana iş parçacığında teslim edilir.
 - Tip-güvenli kendi `ActivityAttributes` türünüz için native tarafta `HeroSignal.LiveActivities.register(MyAttributes.self)`
   çağırın (ayrıntı: `docs/sdk/ios.md` "Live Activities").
+
+### Konum
+
+Kullanıcı izin verip paylaşımı açtığında yerel SDK yaklaşık konumu push aboneliğine yazar (konum hedefleme). Yalnızca ön
+planda çalışır, arka plan konumu istenmez: paylaşım açık ve izin varken oturum başında ve uygulama ön plana döndüğünde en
+sık 5 dakikada bir gönderilir (`PATCH /sdk/v1/apps/{appId}/subscriptions/{id}` → `location`). Tercih yerel SDK'da kalıcıdır.
+
+```csharp
+// İzin yoksa önce açıklama diyaloğu (metin verilmezse SDK'nın Türkçe/İngilizce varsayılanı), sonra sistem izni.
+var granted = await HeroSignal.Location.RequestPermissionAsync("Yakındaki mağazaların kampanyalarını gösterebilmek için konumunuzu kullanırız.");
+if (granted) HeroSignal.Location.SetShared(true);
+
+Debug.Log(HeroSignal.Location.IsShared);   // kalıcı tercih (izin durumundan bağımsız)
+HeroSignal.Location.SetShared(false);      // sunucudaki konum ve rıza kaydı silinir (location: null)
+```
+
+- `RequestPermissionAsync(rationale)` sonucu ana iş parçacığında döner: izin var veya verildiyse `true`; kullanıcı
+  "Şimdi değil" dedi, sistem iznini reddetti, izin daha önce kalıcı olarak reddedildi (yeniden sorulamaz; kullanıcıyı
+  ayarlara yönlendirin) ya da aşağıdaki platform tanımı eksikse `false`.
+- **iOS:** Info.plist'te `NSLocationWhenInUseUsageDescription` zorunludur; yoksa istek `false` döner ve yerel SDK hata
+  günlüğü yazar. Player Settings → iOS → Other Settings → **Location Usage Description** alanını doldurun (Unity her
+  derlemede `NSLocationWhenInUseUsageDescription` olarak yazar) ya da kendi `PostProcessBuild` betiğinizle ekleyin.
+  Yalnızca "kullanırken" izni istenir (Always istenmez). CoreLocation çerçevesi `HeroSignal/App` pod'uyla gelir.
+- **Android:** paket izin eklemez; uygulamanın manifest'ine (Player Settings → Publishing Settings → Custom Main
+  Manifest, `Assets/Plugins/Android/AndroidManifest.xml`) ekleyin:
+  ```xml
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <!-- isteğe bağlı, hassas konum için: -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  ```
+  Manifest'te ikisi de yoksa istek uyarı günlüğüyle `false` döner. Açıklama diyaloğu yerel SDK'nın string kaynaklarını
+  (`hs_location_rationale_*`, tr/en) kullanır; sistem izni `HeroSignal.Location.PERMISSION_REQUEST_CODE` ile istenir ve
+  sonuç izin penceresi kapanıp oyun ön plana döndüğünde Java köprüsünde alınır (Unity etkinliğinde değişiklik gerekmez).
+  `ACCESS_BACKGROUND_LOCATION` eklemeyin; SDK arka planda konum okumaz.
+- **KVKK/GDPR:** sunucu ilk konumu açık rıza kaydı olarak saklar; paylaşımı yalnızca kullanıcının açık onayıyla açın.
+  `RequiresPrivacyConsent` açıkken `SetConsentGiven(true)` verilmeden konum hiç gönderilmez; izin yoksa da sessizce
+  gönderilmez. `SetShared(false)` konumu ve rıza kaydını sunucudan sildirir, gönderilmemiş konumu atar.
+- **Editor, Standalone, WebGL:** konum okunmaz ve ağ çağrısı yapılmaz; `SetShared` tercihi yalnızca bellekte tutar
+  (`IsShared` onu döndürür), `RequestPermissionAsync` her zaman `false` döner.
 
 ## Mimari
 

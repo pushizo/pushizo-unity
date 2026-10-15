@@ -81,6 +81,9 @@ namespace HeroSignalSdk.Internal
         [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue);
         [DllImport("__Internal")] private static extern void hs_setup_default_live_activity(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_start_default_live_activity(byte[] activityId, byte[] attributesJson, byte[] contentStateJson, int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern int hs_location_is_shared();
+        [DllImport("__Internal")] private static extern void hs_location_set_shared(int shared);
+        [DllImport("__Internal")] private static extern void hs_location_request_permission(byte[]? rationale, int requestId, PermissionCallback callback);
 
         private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value + "\0");
 
@@ -240,6 +243,13 @@ namespace HeroSignalSdk.Internal
 
         public void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result) =>
             hs_start_default_live_activity(Utf8(activityId), Utf8(attributesJson), Utf8(contentStateJson), Register(s_results, result), s_resultCallback);
+
+        public bool GetLocationShared() => hs_location_is_shared() != 0;
+
+        public void SetLocationShared(bool shared) => hs_location_set_shared(shared ? 1 : 0);
+
+        public void RequestLocationPermission(string? rationale, Action<bool> completion) =>
+            hs_location_request_permission(Utf8OrNull(rationale), Register(s_permissions, completion), s_permissionCallback);
     }
 }
 #endif

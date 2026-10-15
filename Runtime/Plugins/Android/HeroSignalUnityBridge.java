@@ -2,9 +2,12 @@ package com.herosignal.unity;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -83,6 +86,15 @@ public final class HeroSignalUnityBridge {
     private static boolean pausedSinceRequest;
     private static WeakReference<Activity> permissionActivity;
 
+    /** Konum izni isteği: açıklama diyaloğu → sistem izni → sonuç (bildirim izniyle aynı ön plana dönüş deseni). */
+    private static final Object LOCATION_LOCK = new Object();
+    private static final List<HeroSignalUnityPermissionCallback> LOCATION_CALLBACKS = new ArrayList<>();
+    private static final int LOCATION_IDLE = 0;
+    private static final int LOCATION_RATIONALE = 1;
+    private static final int LOCATION_SYSTEM = 2;
+    private static int locationPhase = LOCATION_IDLE;
+    private static boolean locationPausedSinceRequest;
+
     private HeroSignalUnityBridge() {
     }
 
@@ -110,6 +122,10 @@ public final class HeroSignalUnityBridge {
             synchronized (PERMISSION_LOCK) {
                 if (permissionPending) pausedSinceRequest = true;
             }
+            synchronized (LOCATION_LOCK) {
+                // Açıklama diyaloğu etkinliği duraklatmaz; yalnızca sistem izin penceresi sayılır.
+                if (locationPhase == LOCATION_SYSTEM) locationPausedSinceRequest = true;
+            }
         }
 
         @Override
@@ -119,6 +135,11 @@ public final class HeroSignalUnityBridge {
                 resolve = permissionPending && pausedSinceRequest;
             }
             if (resolve) resolvePermissionRequest();
+            boolean resolveLocation;
+            synchronized (LOCATION_LOCK) {
+                resolveLocation = locationPhase == LOCATION_SYSTEM && locationPausedSinceRequest;
+            }
+            if (resolveLocation) resolveLocationRequest();
         }
 
         @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
@@ -347,6 +368,130 @@ public final class HeroSignalUnityBridge {
     /** Aynı grup anahtarına (android_group) sahip bildirimleri ve grup özetini kaldırır. */
     public static void removeGroupedNotifications(String group) {
         HeroSignal.Notifications.removeGroupedNotifications(group);
+    }
+
+    // --- Konum (v2 Faz 17b; yalnızca ön plan) ---
+
+    /** Konum paylaşımı açık mı (yerel SDK'nın kalıcı tercihi; izin durumundan bağımsız). */
+    public static boolean locationShared() { return HeroSignal.Location.isShared(); }
+
+    /** Paylaşımı açar/kapatır; kapatınca yerel SDK sunucuya {@code location: null} gönderir. */
+    public static void setLocationShared(boolean shared) { HeroSignal.Location.setShared(shared); }
+
+    /**
+     * Ön plan konum iznini ister. Yerel SDK'nın {@code Location.requestPermission} sonucu bildirmediği ve Unity etkinliği
+     * {@code onRequestPermissionsResult}'ı iletmediği için akış köprüdedir: izin zaten varsa true; etkinlik yoksa veya
+     * manifest'te ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION yoksa (uyarı loglanır) false; aksi halde SDK string
+     * kaynaklarıyla açıklama diyaloğu (mesaj: rationale boş değilse o), "Şimdi değil"/iptal → false; "Devam" → sistem izni
+     * ({@code HeroSignal.Location.PERMISSION_REQUEST_CODE}). Sonuç izin penceresi kapanıp etkinlik ön plana döndüğünde
+     * (pencere açılmazsa — kalıcı ret — kısa süre sonra) {@code HeroSignal.Location.onPermissionResult()} çağrılarak
+     * güncel izin durumuyla bildirilir. Bekleyen istek varken gelen çağrılar aynı sonucu alır.
+     */
+    public static void requestLocationPermission(Activity activity, String rationale, HeroSignalUnityPermissionCallback callback) {
+        if (HeroSignal.Location.getPermissionGranted()) {
+            HeroSignal.Location.onPermissionResult();
+            callback.onResult(true);
+            return;
+        }
+        if (activity == null) {
+            callback.onResult(false);
+            return;
+        }
+        String[] permissions = declaredLocationPermissions(activity);
+        if (permissions.length == 0) {
+            HsLog.INSTANCE.w("konum izni istenemedi: uygulama manifest'inde ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION yok", null);
+            callback.onResult(false);
+            return;
+        }
+        synchronized (LOCATION_LOCK) {
+            LOCATION_CALLBACKS.add(callback);
+            if (locationPhase != LOCATION_IDLE) return;
+            locationPhase = LOCATION_RATIONALE;
+            locationPausedSinceRequest = false;
+        }
+        String message = rationale == null || rationale.trim().isEmpty() ? null : rationale;
+        activity.runOnUiThread(() -> showLocationRationale(activity, message, permissions));
+    }
+
+    private static void showLocationRationale(Activity activity, String rationale, String[] permissions) {
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            resolveLocationRequest();
+            return;
+        }
+        try {
+            new AlertDialog.Builder(activity)
+                    .setTitle(com.herosignal.sdk.R.string.hs_location_rationale_title)
+                    .setMessage(rationale != null ? rationale : activity.getString(com.herosignal.sdk.R.string.hs_location_rationale_message))
+                    .setPositiveButton(com.herosignal.sdk.R.string.hs_location_rationale_continue, (dialog, which) -> askLocationSystem(activity, permissions))
+                    .setNegativeButton(com.herosignal.sdk.R.string.hs_location_rationale_not_now, (dialog, which) -> resolveLocationRequest())
+                    .setOnCancelListener(dialog -> resolveLocationRequest())
+                    .show();
+        } catch (RuntimeException e) {
+            HsLog.INSTANCE.w("konum izni açıklama diyaloğu gösterilemedi", e);
+            resolveLocationRequest();
+        }
+    }
+
+    private static void askLocationSystem(Activity activity, String[] permissions) {
+        synchronized (LOCATION_LOCK) {
+            if (locationPhase != LOCATION_RATIONALE) return;
+            locationPhase = LOCATION_SYSTEM;
+            locationPausedSinceRequest = false;
+        }
+        try {
+            ActivityCompat.requestPermissions(activity, permissions, HeroSignal.Location.PERMISSION_REQUEST_CODE);
+        } catch (RuntimeException e) {
+            HsLog.INSTANCE.w("konum izni istenemedi", e);
+            resolveLocationRequest();
+            return;
+        }
+        MAIN.postDelayed(() -> {
+            boolean noDialog;
+            synchronized (LOCATION_LOCK) {
+                noDialog = locationPhase == LOCATION_SYSTEM && !locationPausedSinceRequest;
+            }
+            if (noDialog) resolveLocationRequest();
+        }, PERMISSION_NO_DIALOG_TIMEOUT_MS);
+    }
+
+    private static void resolveLocationRequest() {
+        List<HeroSignalUnityPermissionCallback> callbacks;
+        synchronized (LOCATION_LOCK) {
+            if (locationPhase == LOCATION_IDLE) return;
+            locationPhase = LOCATION_IDLE;
+            locationPausedSinceRequest = false;
+            callbacks = new ArrayList<>(LOCATION_CALLBACKS);
+            LOCATION_CALLBACKS.clear();
+        }
+        // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
+        HeroSignal.Location.onPermissionResult();
+        boolean granted = HeroSignal.Location.getPermissionGranted();
+        for (HeroSignalUnityPermissionCallback callback : callbacks) {
+            try {
+                callback.onResult(granted);
+            } catch (RuntimeException e) {
+                HsLog.INSTANCE.e("konum izni geri çağrısı hata verdi", e);
+            }
+        }
+    }
+
+    /** Uygulama manifest'inde tanımlı ön plan konum izinleri (arka plan konumu istenmez). */
+    private static String[] declaredLocationPermissions(Context context) {
+        List<String> result = new ArrayList<>(2);
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), PackageManager.GET_PERMISSIONS);
+            if (info.requestedPermissions != null) {
+                for (String permission : info.requestedPermissions) {
+                    if ((Manifest.permission.ACCESS_COARSE_LOCATION.equals(permission) || Manifest.permission.ACCESS_FINE_LOCATION.equals(permission))
+                            && !result.contains(permission)) {
+                        result.add(permission);
+                    }
+                }
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            HsLog.INSTANCE.w("uygulama izinleri okunamadı", e);
+        }
+        return result.toArray(new String[0]);
     }
 
     // --- Ön plan ---

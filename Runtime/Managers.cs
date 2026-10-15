@@ -538,6 +538,42 @@ namespace HeroSignalSdk
             Task.FromException(new HeroSignalException(HeroSignalException.PlatformNotSupported, UnsupportedMessage));
     }
 
+    /// <summary>
+    /// Konum paylaşımı (<c>HeroSignal.Location</c>, v2 Faz 17b). Yalnızca ön planda çalışır (arka plan konumu yok):
+    /// paylaşım açık ve izin varken yerel SDK oturum başında ve uygulama ön plana döndüğünde en sık 5 dakikada bir
+    /// yaklaşık konumu push aboneliğine yazar. İzin yoksa veya gizlilik onayı verilmemişse (<see cref="HeroSignal.SetConsentGiven"/>)
+    /// hiçbir şey gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır; <see cref="SetShared"/>(false) konumu ve
+    /// rıza kaydını sildirir. Tercih yerel SDK'da kalıcıdır. Editor ve yerel SDK'sı olmayan platformlarda tercih yalnızca
+    /// bellekte tutulur, ağ çağrısı yapılmaz ve <see cref="RequestPermissionAsync"/> false döner.
+    /// </summary>
+    public sealed class LocationManager
+    {
+        internal LocationManager()
+        {
+        }
+
+        /// <summary>Konum paylaşımı açık mı (kalıcı tercih; izin durumundan bağımsız). Başlatılmadan önce false.</summary>
+        public bool IsShared => HeroSignal.BridgeOrNull()?.GetLocationShared() ?? false;
+
+        /// <summary>
+        /// Paylaşımı açar/kapatır. Açılırken izin varsa konum hemen gönderilir; kapatılınca sunucuya <c>location: null</c>
+        /// gönderilir (konum ve rıza kaydı silinir).
+        /// </summary>
+        public void SetShared(bool shared) => HeroSignal.Bridge().SetLocationShared(shared);
+
+        /// <summary>
+        /// Ön plan konum iznini ister (iOS "kullanırken", Android <c>ACCESS_COARSE_LOCATION</c>/<c>ACCESS_FINE_LOCATION</c>).
+        /// İzin yoksa önce açıklama diyaloğu gösterilir (<paramref name="rationale"/>; boşsa SDK'nın Türkçe/İngilizce varsayılan
+        /// metni), kullanıcı devam ederse sistem izni istenir. Sonuç ana iş parçacığında: izin var veya verildiyse true;
+        /// reddedildi, kalıcı olarak reddedilmiş, Info.plist açıklaması / manifest izni eksikse false.
+        /// </summary>
+        public Task<bool> RequestPermissionAsync(string? rationale = null)
+        {
+            var text = string.IsNullOrWhiteSpace(rationale) ? null : rationale!.Trim();
+            return HeroSignal.CallBool((bridge, done) => bridge.RequestLocationPermission(text, done));
+        }
+    }
+
     /// <summary>Hata ayıklama (<c>HeroSignal.Debug</c>).</summary>
     public sealed class DebugManager
     {

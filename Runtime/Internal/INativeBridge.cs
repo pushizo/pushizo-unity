@@ -104,5 +104,17 @@ namespace HeroSignalSdk.Internal
         /// JSON nesnesi (değerler metin, sayı, bool). Başarı JSON'u: null; hata kodları <see cref="SetupDefaultLiveActivity"/> ile aynı.
         /// </summary>
         void StartDefaultLiveActivity(string activityId, string attributesJson, string contentStateJson, NativeResult result);
+
+        /// <summary>Konum paylaşımı açık mı (yerel SDK'nın kalıcı tercihi; izin durumundan bağımsız).</summary>
+        bool GetLocationShared();
+
+        /// <summary>Konum paylaşımını açar/kapatır; kapatınca yerel SDK sunucuya <c>location: null</c> gönderir.</summary>
+        void SetLocationShared(bool shared);
+
+        /// <summary>
+        /// Ön plan konum iznini ister (önce açıklama diyaloğu; <paramref name="rationale"/> null ise SDK'nın varsayılan
+        /// metni). Sonuç: izin var/verildi mi; herhangi bir iş parçacığından gelebilir.
+        /// </summary>
+        void RequestLocationPermission(string? rationale, Action<bool> completion);
     }
 }

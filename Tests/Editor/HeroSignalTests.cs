@@ -500,6 +500,61 @@ namespace HeroSignalSdk.Tests
         }
 
         [Test]
+        public void Location_calls_are_forwarded_to_bridge()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            Assert.IsFalse(HeroSignal.Location.IsShared);
+
+            HeroSignal.Location.SetShared(true);
+            Assert.IsTrue(HeroSignal.Location.IsShared);
+            HeroSignal.Location.SetShared(false);
+            Assert.IsFalse(HeroSignal.Location.IsShared);
+
+            var granted = HeroSignal.Location.RequestPermissionAsync(" Yakındaki mağazalar için ");
+            Assert.IsTrue(granted.IsCompleted);
+            Assert.IsTrue(granted.Result);
+
+            // Boş/yalnızca boşluk açıklama yerel SDK'nın varsayılan metnine düşer (null iletilir).
+            _bridge.LocationPermissionResult = false;
+            Assert.IsFalse(HeroSignal.Location.RequestPermissionAsync().Result);
+            Assert.IsFalse(HeroSignal.Location.RequestPermissionAsync("  ").Result);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "locationShared:True",
+                "locationShared:False",
+                "requestLocationPermission:Yakındaki mağazalar için",
+                "requestLocationPermission:<null>",
+                "requestLocationPermission:<null>",
+            }, _bridge.Calls);
+        }
+
+        [Test]
+        public void Location_before_initialize_throws_and_reads_are_safe()
+        {
+            Assert.IsFalse(HeroSignal.Location.IsShared);
+            Assert.Throws<InvalidOperationException>(() => HeroSignal.Location.SetShared(true));
+            Assert.Throws<InvalidOperationException>(() => HeroSignal.Location.RequestPermissionAsync());
+            Assert.IsEmpty(_bridge.Calls);
+        }
+
+        [Test]
+        public void Editor_bridge_keeps_location_preference_in_memory_and_denies_permission()
+        {
+            HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+            Init();
+            Assert.IsFalse(HeroSignal.Location.IsShared);
+            HeroSignal.Location.SetShared(true);
+            Assert.IsTrue(HeroSignal.Location.IsShared);
+            var permission = HeroSignal.Location.RequestPermissionAsync("Konum açıklaması");
+            Assert.IsTrue(permission.IsCompleted);
+            Assert.IsFalse(permission.Result);
+            HeroSignal.Location.SetShared(false);
+            Assert.IsFalse(HeroSignal.Location.IsShared);
+        }
+
+        [Test]
         public void Editor_bridge_simulates_state_without_native_sdk()
         {
             HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
