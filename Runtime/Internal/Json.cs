@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
     /// Küçük JSON okuyucu/yazıcı (Unity'de System.Text.Json yok, JsonUtility sözlük desteklemez). Okuma sonucu:

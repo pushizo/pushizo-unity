@@ -6,7 +6,7 @@ using UnityEditor.iOS.Xcode;
 using UnityEditor.iOS.Xcode.Extensions;
 using UnityEngine;
 
-namespace HeroSignalSdk.Editor
+namespace PushizoSdk.Editor
 {
     /// <summary>
     /// iOS derleme sonrası: Push Notifications yeteneği (aps-environment), Background Modes → remote-notification,
@@ -15,16 +15,16 @@ namespace HeroSignalSdk.Editor
     /// (UnityAppController APNs token'ını köprüye iletsin). Sıra 45: EDM4U Podfile'ı 40'ta üretir, <c>pod install</c> 50'de
     /// çalışır; NSE hedefi ve Podfile girdisi bu aralıkta eklenir.
     /// </summary>
-    public static class HeroSignalIosPostProcessor
+    public static class PushizoIosPostProcessor
     {
-        public const string ExtensionTargetName = "HeroSignalNotificationServiceExtension";
+        public const string ExtensionTargetName = "PushizoNotificationServiceExtension";
         private const string PodVersion = "~> 0.1.0";
 
         [PostProcessBuild(45)]
         public static void OnPostProcessBuild(BuildTarget target, string buildPath)
         {
             if (target != BuildTarget.iOS) return;
-            var settings = HeroSignalSettings.Load();
+            var settings = PushizoSettings.Load();
             var projectPath = PBXProject.GetPBXProjectPath(buildPath);
 
             var project = new PBXProject();
@@ -40,12 +40,12 @@ namespace HeroSignalSdk.Editor
             project.AddFrameworkToProject(frameworkTarget, "UserNotifications.framework", false);
 
             var entitlementsPath = project.GetBuildPropertyForAnyConfig(mainTarget, "CODE_SIGN_ENTITLEMENTS");
-            if (string.IsNullOrEmpty(entitlementsPath)) entitlementsPath = "Unity-iPhone/HeroSignal.entitlements";
+            if (string.IsNullOrEmpty(entitlementsPath)) entitlementsPath = "Unity-iPhone/Pushizo.entitlements";
 
             var addExtension = settings.iosNotificationServiceExtension;
             if (addExtension && string.IsNullOrWhiteSpace(settings.appId))
             {
-                Debug.LogWarning("[HeroSignal] Notification Service Extension eklenmedi: Project Settings → HeroSignal → App ID boş.");
+                Debug.LogWarning("[Pushizo] Notification Service Extension eklenmedi: Project Settings → Pushizo → App ID boş.");
                 addExtension = false;
             }
             if (addExtension && project.TargetGuidByName(ExtensionTargetName) == null)
@@ -67,22 +67,22 @@ namespace HeroSignalSdk.Editor
         /// <summary>
         /// UnityAppController APNs token'ını yalnızca <c>UNITY_USES_REMOTE_NOTIFICATIONS</c> 1 iken alır ve köprünün
         /// dinlediği <c>kUnityDidRegisterForRemoteNotificationsWithDeviceToken</c> bildirimini yayınlar. Unity bu değeri
-        /// yalnız kendi bildirim API'leri kullanıldığında açar; HeroSignal için her zaman açılır.
+        /// yalnız kendi bildirim API'leri kullanıldığında açar; Pushizo için her zaman açılır.
         /// </summary>
         private static void EnableRemoteNotifications(string buildPath)
         {
-            var header = Path.Combine(buildPath, HeroSignalIosPreprocessorHeader.RelativePath);
+            var header = Path.Combine(buildPath, PushizoIosPreprocessorHeader.RelativePath);
             if (!File.Exists(header))
             {
-                Debug.LogWarning("[HeroSignal] " + HeroSignalIosPreprocessorHeader.RelativePath + " bulunamadı; APNs token'ı için UNITY_USES_REMOTE_NOTIFICATIONS değerini elle 1 yapın.");
+                Debug.LogWarning("[Pushizo] " + PushizoIosPreprocessorHeader.RelativePath + " bulunamadı; APNs token'ı için UNITY_USES_REMOTE_NOTIFICATIONS değerini elle 1 yapın.");
                 return;
             }
             var content = File.ReadAllText(header);
-            var updated = HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(content);
+            var updated = PushizoIosPreprocessorHeader.EnableRemoteNotifications(content);
             if (updated != content) File.WriteAllText(header, updated);
         }
 
-        private static void AddNotificationServiceExtension(PBXProject project, string mainTarget, string buildPath, HeroSignalSettings settings)
+        private static void AddNotificationServiceExtension(PBXProject project, string mainTarget, string buildPath, PushizoSettings settings)
         {
             var dir = Path.Combine(buildPath, ExtensionTargetName);
             Directory.CreateDirectory(dir);
@@ -124,18 +124,18 @@ namespace HeroSignalSdk.Editor
             var podfile = Path.Combine(buildPath, "Podfile");
             if (!File.Exists(podfile))
             {
-                Debug.LogWarning("[HeroSignal] Podfile bulunamadı (EDM4U kurulu mu?). NSE hedefine HeroSignal/Extension pod'unu elle ekleyin.");
+                Debug.LogWarning("[Pushizo] Podfile bulunamadı (EDM4U kurulu mu?). NSE hedefine Pushizo/Extension pod'unu elle ekleyin.");
                 return;
             }
             var content = File.ReadAllText(podfile);
             if (content.Contains("target '" + ExtensionTargetName + "'")) return;
-            content += "\ntarget '" + ExtensionTargetName + "' do\n  pod 'HeroSignal/Extension', '" + PodVersion + "'\nend\n";
+            content += "\ntarget '" + ExtensionTargetName + "' do\n  pod 'Pushizo/Extension', '" + PodVersion + "'\nend\n";
             File.WriteAllText(podfile, content);
         }
 
         private static string Escape(string value) => System.Security.SecurityElement.Escape(value) ?? string.Empty;
 
-        private static string ExtensionInfoPlist(HeroSignalSettings settings) =>
+        private static string ExtensionInfoPlist(PushizoSettings settings) =>
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
             "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
             "<plist version=\"1.0\">\n<dict>\n" +
@@ -148,33 +148,33 @@ namespace HeroSignalSdk.Editor
             "  <key>CFBundlePackageType</key><string>XPC!</string>\n" +
             "  <key>CFBundleShortVersionString</key><string>" + Escape(PlayerSettings.bundleVersion) + "</string>\n" +
             "  <key>CFBundleVersion</key><string>" + Escape(PlayerSettings.iOS.buildNumber) + "</string>\n" +
-            "  <key>HeroSignalAppId</key><string>" + Escape(settings.appId.Trim()) + "</string>\n" +
-            "  <key>HeroSignalApiUrl</key><string>" + Escape(settings.apiUrl.Trim()) + "</string>\n" +
-            "  <key>HeroSignalAppGroup</key><string>" + Escape(settings.iosAppGroup.Trim()) + "</string>\n" +
+            "  <key>PushizoAppId</key><string>" + Escape(settings.appId.Trim()) + "</string>\n" +
+            "  <key>PushizoApiUrl</key><string>" + Escape(settings.apiUrl.Trim()) + "</string>\n" +
+            "  <key>PushizoAppGroup</key><string>" + Escape(settings.iosAppGroup.Trim()) + "</string>\n" +
             "  <key>NSExtension</key>\n  <dict>\n" +
             "    <key>NSExtensionPointIdentifier</key><string>com.apple.usernotifications.service</string>\n" +
             "    <key>NSExtensionPrincipalClass</key><string>$(PRODUCT_MODULE_NAME).NotificationService</string>\n" +
             "  </dict>\n</dict>\n</plist>\n";
 
-        /// <summary>NSE sınıfı: yerel HeroSignalExtension yardımcısını Info.plist'teki App ID/API adresiyle kullanır.</summary>
+        /// <summary>NSE sınıfı: yerel PushizoExtension yardımcısını Info.plist'teki App ID/API adresiyle kullanır.</summary>
         private const string NotificationServiceSource =
             "import UserNotifications\n" +
-            "import HeroSignal\n\n" +
-            "// HeroSignal Unity paketinin ürettiği Notification Service Extension: zengin medya, rozet ve teslimat onayı.\n" +
+            "import Pushizo\n\n" +
+            "// Pushizo Unity paketinin ürettiği Notification Service Extension: zengin medya, rozet ve teslimat onayı.\n" +
             "final class NotificationService: UNNotificationServiceExtension {\n" +
-            "    private lazy var heroSignal: HeroSignalNotificationServiceExtension = {\n" +
+            "    private lazy var pushizo: PushizoNotificationServiceExtension = {\n" +
             "        let info = Bundle.main.infoDictionary ?? [:]\n" +
-            "        let group = (info[\"HeroSignalAppGroup\"] as? String).flatMap { $0.isEmpty ? nil : $0 }\n" +
-            "        return HeroSignalNotificationServiceExtension(\n" +
-            "            appId: info[\"HeroSignalAppId\"] as? String ?? \"\",\n" +
-            "            apiUrl: info[\"HeroSignalApiUrl\"] as? String ?? \"https://api.herosignal.dev\",\n" +
+            "        let group = (info[\"PushizoAppGroup\"] as? String).flatMap { $0.isEmpty ? nil : $0 }\n" +
+            "        return PushizoNotificationServiceExtension(\n" +
+            "            appId: info[\"PushizoAppId\"] as? String ?? \"\",\n" +
+            "            apiUrl: info[\"PushizoApiUrl\"] as? String ?? \"https://api.pushizo.com\",\n" +
             "            appGroup: group)\n" +
             "    }()\n\n" +
             "    override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {\n" +
-            "        heroSignal.didReceive(request, withContentHandler: contentHandler)\n" +
+            "        pushizo.didReceive(request, withContentHandler: contentHandler)\n" +
             "    }\n\n" +
             "    override func serviceExtensionTimeWillExpire() {\n" +
-            "        heroSignal.serviceExtensionTimeWillExpire()\n" +
+            "        pushizo.serviceExtensionTimeWillExpire()\n" +
             "    }\n" +
             "}\n";
     }

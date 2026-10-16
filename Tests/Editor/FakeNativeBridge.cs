@@ -1,9 +1,9 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using HeroSignalSdk.Internal;
+using PushizoSdk.Internal;
 
-namespace HeroSignalSdk.Tests
+namespace PushizoSdk.Tests
 {
     /// <summary>Yerel köprünün test ikizi: çağrıları kaydeder, olayları yerel köprülerle aynı JSON biçiminde üretir.</summary>
     internal sealed class FakeNativeBridge : INativeBridge

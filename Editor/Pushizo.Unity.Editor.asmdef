@@ -1,8 +1,12 @@
 {
-    "name": "HeroSignal.Unity",
-    "rootNamespace": "HeroSignalSdk",
-    "references": [],
-    "includePlatforms": [],
+    "name": "Pushizo.Unity.Editor",
+    "rootNamespace": "PushizoSdk.Editor",
+    "references": [
+        "Pushizo.Unity"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  HeroSignal Unity paketini gerçek Unity Editor'de derler ve EditMode testlerini çalıştırır.
+  Pushizo Unity paketini gerçek Unity Editor'de derler ve EditMode testlerini çalıştırır.
 
 .DESCRIPTION
   Paket `TestProject~` projesine yerel yol ile eklenir (`Packages/manifest.json`). Testler her derleme hedefinde ayrı
@@ -35,7 +35,7 @@ New-Item -ItemType Directory -Force -Path $results | Out-Null
 # Unity, adında `~` geçen proje yolunu göreli sayıp çalışma klasörüyle birleştirir; ayrıca Library önbelleği birkaç
 # yüz MB'tır. Bu yüzden proje depo dışında (geçici klasörde) kurulur ve pakete mutlak `file:` yoluyla bağlanır.
 $packageRoot = (Resolve-Path (Join-Path $template '..')).Path -replace '\\', '/'
-$project = Join-Path ([System.IO.Path]::GetTempPath()) 'herosignal-unity-testproject'
+$project = Join-Path ([System.IO.Path]::GetTempPath()) 'pushizo-unity-testproject'
 # Unity `Assets` ve `ProjectSettings` olmayan dizini proje saymaz; boş `ProjectSettings` ile ilk açılışta varsayılan
 # şablon paketlerini ekler. Minimal manifest her koşuda yeniden yazılır (ağdan gereksiz paket çekilmez).
 foreach ($dir in 'Packages', 'Assets', 'ProjectSettings') {
@@ -43,7 +43,7 @@ foreach ($dir in 'Packages', 'Assets', 'ProjectSettings') {
 }
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $project 'Packages\packages-lock.json')
 $manifest = Get-Content (Join-Path $template 'Packages\manifest.json') -Raw | ConvertFrom-Json
-$manifest.dependencies.'com.herosignal.unity' = "file:$packageRoot"
+$manifest.dependencies.'com.pushizo.unity' = "file:$packageRoot"
 Write-Utf8NoBom (Join-Path $project 'Packages\manifest.json') ($manifest | ConvertTo-Json -Depth 5)
 Write-Host "Proje: $project"
 

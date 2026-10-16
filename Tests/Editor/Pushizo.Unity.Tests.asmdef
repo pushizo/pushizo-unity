@@ -1,9 +1,9 @@
 {
-    "name": "HeroSignal.Unity.Tests",
-    "rootNamespace": "HeroSignalSdk.Tests",
+    "name": "Pushizo.Unity.Tests",
+    "rootNamespace": "PushizoSdk.Tests",
     "references": [
-        "HeroSignal.Unity",
-        "HeroSignal.Unity.Editor",
+        "Pushizo.Unity",
+        "Pushizo.Unity.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

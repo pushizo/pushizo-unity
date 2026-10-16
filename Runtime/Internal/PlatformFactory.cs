@@ -1,6 +1,6 @@
 #nullable enable
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>Derleme hedefine göre yerel köprüyü seçer (Editor ve diğer platformlarda <see cref="EditorNativeBridge"/>).</summary>
     internal static class PlatformFactory

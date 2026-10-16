@@ -4,15 +4,15 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
-    /// Yerel köprülerin (Android <c>HeroSignalUnityBridge.java</c>, iOS <c>HeroSignalUnityBridge.swift</c>) ortak JSON
+    /// Yerel köprülerin (Android <c>PushizoUnityBridge.java</c>, iOS <c>PushizoUnityBridge.swift</c>) ortak JSON
     /// biçimlerinin ayrıştırıcısı ve yazıcısı; .NET MAUI köprüsüyle aynı biçimlerdir. Zamanlar epoch milisaniyedir.
     /// </summary>
     internal static class BridgeJson
     {
-        public static HeroSignalNotification ParseNotification(string json) => ReadNotification(Object(json));
+        public static PushizoNotification ParseNotification(string json) => ReadNotification(Object(json));
 
         public static NotificationClickedEventArgs ParseNotificationClick(string json)
         {
@@ -24,14 +24,14 @@ namespace HeroSignalSdk.Internal
         }
 
         /// <summary><c>{"eventId":"…","notification":{…}}</c>.</summary>
-        public static KeyValuePair<string, HeroSignalNotification> ParseForeground(string json)
+        public static KeyValuePair<string, PushizoNotification> ParseForeground(string json)
         {
             var root = Object(json);
             var eventId = Str(root, "eventId") ?? throw Invalid("eventId");
             var notification = root.TryGetValue("notification", out var n) && n is Dictionary<string, object?> map
                 ? ReadNotification(map)
                 : EmptyNotification();
-            return new KeyValuePair<string, HeroSignalNotification>(eventId, notification);
+            return new KeyValuePair<string, PushizoNotification>(eventId, notification);
         }
 
         public static PushSubscriptionState ParseSubscriptionState(string json)
@@ -83,7 +83,7 @@ namespace HeroSignalSdk.Internal
 
         /// <summary>
         /// <c>{"preferences":[…],"categories":[…]}</c> (<see cref="INativeBridge.GetPreferences"/>). Kategorisiz tercih
-        /// <see cref="HeroSignalException.InvalidResponse"/> verir; anahtarsız kategori atlanır (yerel SDK'larla aynı).
+        /// <see cref="PushizoException.InvalidResponse"/> verir; anahtarsız kategori atlanır (yerel SDK'larla aynı).
         /// </summary>
         public static UserPreferences ParsePreferences(string json)
         {
@@ -150,7 +150,7 @@ namespace HeroSignalSdk.Internal
         }
 
         /// <summary>Yerel köprünün başlatma seçenekleri.</summary>
-        public static string OptionsToJson(HeroSignalOptions options) => Json.Serialize(new Dictionary<string, object?>
+        public static string OptionsToJson(PushizoOptions options) => Json.Serialize(new Dictionary<string, object?>
         {
             ["apiUrl"] = options.ApiUrl,
             ["requiresPrivacyConsent"] = options.RequiresPrivacyConsent,
@@ -167,10 +167,10 @@ namespace HeroSignalSdk.Internal
 
         public static string ToJson(IEnumerable<string> list) => Json.Serialize(list.Cast<object?>().ToList());
 
-        private static HeroSignalNotification EmptyNotification() =>
-            new HeroSignalNotification(null, null, null, null, null, null, Array.Empty<NotificationAction>(), new Dictionary<string, string>());
+        private static PushizoNotification EmptyNotification() =>
+            new PushizoNotification(null, null, null, null, null, null, Array.Empty<NotificationAction>(), new Dictionary<string, string>());
 
-        private static HeroSignalNotification ReadNotification(Dictionary<string, object?> e)
+        private static PushizoNotification ReadNotification(Dictionary<string, object?> e)
         {
             var actions = new List<NotificationAction>();
             if (e.TryGetValue("actions", out var arr) && arr is List<object?> list)
@@ -183,7 +183,7 @@ namespace HeroSignalSdk.Internal
                     actions.Add(new NotificationAction(id, Str(a, "title") ?? id, Str(a, "url"), Str(a, "icon")));
                 }
             }
-            return new HeroSignalNotification(
+            return new PushizoNotification(
                 Str(e, "title"), Str(e, "body"), Str(e, "imageUrl"), Str(e, "url"), Str(e, "deliveryId"), Str(e, "messageId"),
                 actions,
                 e.TryGetValue("data", out var data) && data is Dictionary<string, object?> d ? ReadStringMap(d) : new Dictionary<string, string>(),
@@ -230,15 +230,15 @@ namespace HeroSignalSdk.Internal
             }
             catch (FormatException e)
             {
-                throw new HeroSignalException(HeroSignalException.InvalidResponse, "Köprü yanıtı ayrıştırılamadı.", e);
+                throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı ayrıştırılamadı.", e);
             }
         }
 
         private static Dictionary<string, object?> Object(string json) =>
-            ParseAny(json) as Dictionary<string, object?> ?? throw new HeroSignalException(HeroSignalException.InvalidResponse, "Köprü yanıtı JSON nesnesi değil.");
+            ParseAny(json) as Dictionary<string, object?> ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı JSON nesnesi değil.");
 
-        private static HeroSignalException Invalid(string field) =>
-            new HeroSignalException(HeroSignalException.InvalidResponse, $"Köprü yanıtında '{field}' alanı eksik.");
+        private static PushizoException Invalid(string field) =>
+            new PushizoException(PushizoException.InvalidResponse, $"Köprü yanıtında '{field}' alanı eksik.");
 
         private static string? Str(Dictionary<string, object?> e, string name) =>
             e.TryGetValue(name, out var v) ? v as string : null;

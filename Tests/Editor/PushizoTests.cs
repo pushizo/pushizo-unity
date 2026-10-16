@@ -1,15 +1,15 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using HeroSignalSdk.Internal;
+using PushizoSdk.Internal;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace HeroSignalSdk.Tests
+namespace PushizoSdk.Tests
 {
     /// <summary>Yönetilen katmanın EditMode testleri: sahte köprü ile doğrulama, JSON sözleşmesi ve olay yönlendirme.</summary>
-    public sealed class HeroSignalTests
+    public sealed class PushizoTests
     {
         private const string Notification =
             @"{""title"":""Kargo"",""body"":""Yolda"",""imageUrl"":null,""url"":""app://orders/1"",""deliveryId"":""dlv_1"",""messageId"":""msg_1"",""actions"":[{""id"":""track"",""title"":""Takip"",""url"":""app://track"",""icon"":null}],""data"":{""order"":""1""}}";
@@ -20,34 +20,34 @@ namespace HeroSignalSdk.Tests
         public void SetUp()
         {
             _bridge = new FakeNativeBridge();
-            HeroSignal.ResetForTests(_bridge, new ImmediateDispatcher());
+            Pushizo.ResetForTests(_bridge, new ImmediateDispatcher());
         }
 
         [TearDown]
-        public void TearDown() => HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+        public void TearDown() => Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
 
-        private static void Init(HeroSignalOptions? options = null) =>
-            HeroSignal.Initialize("app_test", options ?? new HeroSignalOptions { ApiUrl = "https://api.example.com" });
+        private static void Init(PushizoOptions? options = null) =>
+            Pushizo.Initialize("app_test", options ?? new PushizoOptions { ApiUrl = "https://api.example.com" });
 
         [Test]
         public void Calls_before_initialize_throw_and_reads_are_safe()
         {
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.Login("user_1"));
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.User.AddTag("a", "b"));
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.Notifications.RequestPermissionAsync());
-            Assert.IsNull(HeroSignal.User.ExternalId);
-            Assert.IsEmpty(HeroSignal.User.GetTags());
-            Assert.IsFalse(HeroSignal.Notifications.Permission);
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Login("user_1"));
+            Assert.Throws<InvalidOperationException>(() => Pushizo.User.AddTag("a", "b"));
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Notifications.RequestPermissionAsync());
+            Assert.IsNull(Pushizo.User.ExternalId);
+            Assert.IsEmpty(Pushizo.User.GetTags());
+            Assert.IsFalse(Pushizo.Notifications.Permission);
         }
 
         [Test]
         public void Initialize_validates_and_passes_options()
         {
-            Assert.Throws<ArgumentException>(() => HeroSignal.Initialize(" "));
-            Assert.Throws<ArgumentException>(() => HeroSignal.Initialize("app_test", new HeroSignalOptions { ApiUrl = "api.example.com" }));
+            Assert.Throws<ArgumentException>(() => Pushizo.Initialize(" "));
+            Assert.Throws<ArgumentException>(() => Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "api.example.com" }));
 
-            HeroSignal.Debug.SetLogLevel(LogLevel.Info);
-            Init(new HeroSignalOptions { ApiUrl = "http://10.0.2.2:4000", RequiresPrivacyConsent = true, LogLevel = LogLevel.Error, IosAppGroup = "group.x" });
+            Pushizo.Debug.SetLogLevel(LogLevel.Info);
+            Init(new PushizoOptions { ApiUrl = "http://10.0.2.2:4000", RequiresPrivacyConsent = true, LogLevel = LogLevel.Error, IosAppGroup = "group.x" });
             Init();
 
             Assert.AreEqual(1, _bridge.StartCount);
@@ -57,20 +57,20 @@ namespace HeroSignalSdk.Tests
             Assert.AreEqual(3L, options["logLevel"]);
             Assert.AreEqual("group.x", options["iosAppGroup"]);
             Assert.IsNull(options["iosApnsEnvironment"]);
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.Initialize("app_other"));
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Initialize("app_other"));
         }
 
         [Test]
         public void User_operations_are_validated_and_serialized()
         {
             Init();
-            HeroSignal.Login("user_42", "");
-            HeroSignal.User.AddTag("plan", "pro");
-            HeroSignal.User.RemoveTag("plan");
-            HeroSignal.User.AddAlias("crm_id", " 42 ");
-            HeroSignal.User.AddEmail(" Ali.Veli@Example.COM ");
-            HeroSignal.User.AddSms("+90 (532) 123-45-67");
-            HeroSignal.User.SetLanguage(" tr ");
+            Pushizo.Login("user_42", "");
+            Pushizo.User.AddTag("plan", "pro");
+            Pushizo.User.RemoveTag("plan");
+            Pushizo.User.AddAlias("crm_id", " 42 ");
+            Pushizo.User.AddEmail(" Ali.Veli@Example.COM ");
+            Pushizo.User.AddSms("+90 (532) 123-45-67");
+            Pushizo.User.SetLanguage(" tr ");
 
             CollectionAssert.AreEqual(new[]
             {
@@ -84,14 +84,14 @@ namespace HeroSignalSdk.Tests
                 "language:tr",
             }, _bridge.Calls);
 
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.AddEmail("geçersiz"));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.AddSms("05321234567"));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.AddAlias("external_id", "x"));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.AddTags(new Dictionary<string, string> { ["k"] = null! }));
-            Assert.Throws<ArgumentException>(() => HeroSignal.InAppMessages.AddTrigger(new string('k', 65), "v"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.AddEmail("geçersiz"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.AddSms("05321234567"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.AddAlias("external_id", "x"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.AddTags(new Dictionary<string, string> { ["k"] = null! }));
+            Assert.Throws<ArgumentException>(() => Pushizo.InAppMessages.AddTrigger(new string('k', 65), "v"));
 
             _bridge.TagsJson = @"{""plan"":""pro"",""score"":10,""vip"":true}";
-            var tags = HeroSignal.User.GetTags();
+            var tags = Pushizo.User.GetTags();
             Assert.AreEqual("pro", tags["plan"]);
             Assert.AreEqual("10", tags["score"]);
             Assert.AreEqual("true", tags["vip"]);
@@ -101,7 +101,7 @@ namespace HeroSignalSdk.Tests
         public void Send_event_serializes_nested_properties()
         {
             Init();
-            HeroSignal.Session.SendEvent("purchase", new Dictionary<string, object?>
+            Pushizo.Session.SendEvent("purchase", new Dictionary<string, object?>
             {
                 ["amount"] = 129.9,
                 ["count"] = 2,
@@ -120,11 +120,11 @@ namespace HeroSignalSdk.Tests
             Assert.AreEqual("Info", ((Dictionary<string, object?>)p["meta"]!)["level"]);
             Assert.AreEqual("2026-10-07T09:30:00.000Z", p["at"]);
 
-            HeroSignal.Session.SendEvent("opened");
+            Pushizo.Session.SendEvent("opened");
             Assert.IsFalse(_bridge.LastEventHasValue);
             Assert.AreEqual("{}", _bridge.LastEventJson);
-            Assert.Throws<ArgumentException>(() => HeroSignal.Session.SendEvent("x", value: double.NaN));
-            Assert.Throws<ArgumentException>(() => HeroSignal.Session.SendEvent("x", new Dictionary<string, object?> { ["o"] = new object() }));
+            Assert.Throws<ArgumentException>(() => Pushizo.Session.SendEvent("x", value: double.NaN));
+            Assert.Throws<ArgumentException>(() => Pushizo.Session.SendEvent("x", new Dictionary<string, object?> { ["o"] = new object() }));
         }
 
         [Test]
@@ -134,8 +134,8 @@ namespace HeroSignalSdk.Tests
             _bridge.Emit("click", @"{""notification"":" + Notification + @",""actionId"":""track"",""url"":""app://track""}");
 
             var received = new List<NotificationClickedEventArgs>();
-            HeroSignal.Notifications.Clicked += e => received.Add(e);
-            HeroSignal.Notifications.Clicked += e => received.Add(e);
+            Pushizo.Notifications.Clicked += e => received.Add(e);
+            Pushizo.Notifications.Clicked += e => received.Add(e);
 
             Assert.AreEqual(1, received.Count);
             Assert.AreEqual("track", received[0].ActionId);
@@ -152,7 +152,7 @@ namespace HeroSignalSdk.Tests
 
             var prevent = false;
             Action<NotificationWillDisplayEventArgs> handler = e => { if (prevent) e.PreventDefault(); };
-            HeroSignal.Notifications.ForegroundWillDisplay += handler;
+            Pushizo.Notifications.ForegroundWillDisplay += handler;
             Assert.IsTrue(_bridge.ForegroundEnabled);
 
             _bridge.Emit("foreground", @"{""eventId"":""evt_1"",""notification"":" + Notification + "}");
@@ -162,7 +162,7 @@ namespace HeroSignalSdk.Tests
             _bridge.Emit("foreground", @"{""eventId"":""evt_2"",""notification"":" + Notification + "}");
             CollectionAssert.DoesNotContain(_bridge.Calls, "display:evt_2");
 
-            HeroSignal.Notifications.ForegroundWillDisplay -= handler;
+            Pushizo.Notifications.ForegroundWillDisplay -= handler;
             Assert.IsFalse(_bridge.ForegroundEnabled);
         }
 
@@ -172,8 +172,8 @@ namespace HeroSignalSdk.Tests
             Init();
             var changes = new List<PushSubscriptionChangedEventArgs>();
             var permissions = new List<bool>();
-            HeroSignal.User.PushSubscription.Changed += e => changes.Add(e);
-            HeroSignal.Notifications.PermissionChanged += p => permissions.Add(p);
+            Pushizo.User.PushSubscription.Changed += e => changes.Add(e);
+            Pushizo.Notifications.PermissionChanged += p => permissions.Add(p);
 
             _bridge.Emit("subscription", @"{""id"":null,""token"":null,""optedIn"":false,""permission"":false}");
             _bridge.Emit("subscription", @"{""id"":""sub_1"",""token"":""tok"",""optedIn"":true,""permission"":true}");
@@ -190,7 +190,7 @@ namespace HeroSignalSdk.Tests
         {
             Init();
             var permissions = new List<bool>();
-            HeroSignal.Notifications.PermissionChanged += p => permissions.Add(p);
+            Pushizo.Notifications.PermissionChanged += p => permissions.Add(p);
 
             // Başlangıç durumu (izin yok) abonelik olayıyla gelir; yerel izin gözlemcisi olayı yalnızca değişiklikte iletilir.
             _bridge.Emit("subscription", @"{""id"":""sub_1"",""token"":""tok"",""optedIn"":true,""permission"":false}");
@@ -208,10 +208,10 @@ namespace HeroSignalSdk.Tests
             Init();
             InAppMessageClickedEventArgs? click = null;
             var phases = new List<string>();
-            HeroSignal.InAppMessages.Clicked += e => click = e;
-            HeroSignal.InAppMessages.WillDisplay += e => phases.Add("will:" + e.Message.Id);
-            HeroSignal.InAppMessages.DidDismiss += e => phases.Add("didDismiss");
-            HeroSignal.InAppMessages.DidDisplay += e => throw new InvalidOperationException("uygulama hatası");
+            Pushizo.InAppMessages.Clicked += e => click = e;
+            Pushizo.InAppMessages.WillDisplay += e => phases.Add("will:" + e.Message.Id);
+            Pushizo.InAppMessages.DidDismiss += e => phases.Add("didDismiss");
+            Pushizo.InAppMessages.DidDisplay += e => throw new InvalidOperationException("uygulama hatası");
 
             _bridge.Emit("inAppClick", @"{""messageId"":""iam_1"",""actionId"":""buy"",""url"":null}");
             _bridge.Emit("inAppLifecycle", @"{""event"":""willDisplay"",""messageId"":""iam_1"",""json"":""{}""}");
@@ -233,13 +233,13 @@ namespace HeroSignalSdk.Tests
         {
             Init();
             _bridge.Calls.Clear();
-            HeroSignal.Notifications.RemoveNotification(-42);
-            HeroSignal.Notifications.RemoveNotification(" ios-request-1 ");
-            HeroSignal.Notifications.RemoveGroupedNotifications("orders");
+            Pushizo.Notifications.RemoveNotification(-42);
+            Pushizo.Notifications.RemoveNotification(" ios-request-1 ");
+            Pushizo.Notifications.RemoveGroupedNotifications("orders");
             CollectionAssert.AreEqual(new[] { "removeNotification:-42", "removeNotification:ios-request-1", "removeGrouped:orders" }, _bridge.Calls);
 
-            Assert.Throws<ArgumentException>(() => HeroSignal.Notifications.RemoveNotification(" "));
-            Assert.Throws<ArgumentException>(() => HeroSignal.Notifications.RemoveGroupedNotifications(""));
+            Assert.Throws<ArgumentException>(() => Pushizo.Notifications.RemoveNotification(" "));
+            Assert.Throws<ArgumentException>(() => Pushizo.Notifications.RemoveGroupedNotifications(""));
             Assert.AreEqual(3, _bridge.Calls.Count);
         }
 
@@ -248,7 +248,7 @@ namespace HeroSignalSdk.Tests
         {
             Init();
             NotificationClickedEventArgs? received = null;
-            HeroSignal.Notifications.Clicked += e => received = e;
+            Pushizo.Notifications.Clicked += e => received = e;
 
             _bridge.Emit("click", @"{""notification"":{""title"":""T"",""data"":{},""androidNotificationId"":12345},""actionId"":null,""url"":null}");
             Assert.AreEqual(12345, received!.Notification.AndroidNotificationId);
@@ -261,12 +261,12 @@ namespace HeroSignalSdk.Tests
         public void Permission_and_inbox_results_complete_tasks()
         {
             Init();
-            var permission = HeroSignal.Notifications.RequestPermissionAsync(fallbackToSettings: true);
+            var permission = Pushizo.Notifications.RequestPermissionAsync(fallbackToSettings: true);
             Assert.IsTrue(permission.IsCompleted);
             Assert.IsTrue(permission.Result);
 
             _bridge.InboxJson = @"{""items"":[{""id"":""in_1"",""title"":""Hoş geldin"",""read"":false,""createdAt"":1759838400000,""data"":{""k"":""v""}}],""unreadCount"":1,""nextCursor"":""c_2"",""hasMore"":true}";
-            var page = HeroSignal.Inbox.ListAsync(20, "c_1");
+            var page = Pushizo.Inbox.ListAsync(20, "c_1");
             Assert.IsTrue(page.IsCompleted);
             Assert.AreEqual(1, page.Result.UnreadCount);
             Assert.AreEqual("Hoş geldin", page.Result.Items[0].Title);
@@ -274,15 +274,15 @@ namespace HeroSignalSdk.Tests
             Assert.AreEqual("c_2", page.Result.NextCursor);
 
             _bridge.InboxJson = @"{""unreadCount"":0}";
-            Assert.AreEqual(0, HeroSignal.Inbox.MarkAllReadAsync().Result);
+            Assert.AreEqual(0, Pushizo.Inbox.MarkAllReadAsync().Result);
 
             _bridge.InboxErrorCode = "NOT_READY";
-            var failed = HeroSignal.Inbox.UnreadCountAsync();
+            var failed = Pushizo.Inbox.UnreadCountAsync();
             Assert.IsTrue(failed.IsFaulted);
-            Assert.AreEqual("NOT_READY", ((HeroSignalException)failed.Exception!.InnerException!).Code);
+            Assert.AreEqual("NOT_READY", ((PushizoException)failed.Exception!.InnerException!).Code);
 
-            Assert.Throws<ArgumentOutOfRangeException>(() => HeroSignal.Inbox.ListAsync(0));
-            Assert.Throws<ArgumentException>(() => HeroSignal.Inbox.ArchiveAsync(" "));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Pushizo.Inbox.ListAsync(0));
+            Assert.Throws<ArgumentException>(() => Pushizo.Inbox.ArchiveAsync(" "));
         }
 
         [Test]
@@ -298,7 +298,7 @@ namespace HeroSignalSdk.Tests
                 @"{""key"":""news"",""name"":{""de"":""Neuigkeiten""},""channels"":null}," +
                 @"{""name"":{""tr"":""Anahtarsız""}}]}";
 
-            var get = HeroSignal.User.GetPreferencesAsync();
+            var get = Pushizo.User.GetPreferencesAsync();
             Assert.IsTrue(get.IsCompleted);
             var result = get.Result;
             Assert.AreEqual("getPreferences", _bridge.Calls[_bridge.Calls.Count - 1]);
@@ -321,7 +321,7 @@ namespace HeroSignalSdk.Tests
             Assert.IsTrue(result.Categories[1].DefaultOptedIn);
             Assert.AreEqual("Neuigkeiten", result.Categories[1].LocalizedName("tr"));
 
-            var set = HeroSignal.User.SetPreferencesAsync(new[]
+            var set = Pushizo.User.SetPreferencesAsync(new[]
             {
                 new PreferenceInput("promo", optedIn: false),
                 new PreferenceInput("news", optedIn: true, channel: "email"),
@@ -333,14 +333,14 @@ namespace HeroSignalSdk.Tests
                 _bridge.Calls[_bridge.Calls.Count - 1]);
 
             _bridge.PreferencesErrorCode = "NOT_READY";
-            var failed = HeroSignal.User.GetPreferencesAsync();
+            var failed = Pushizo.User.GetPreferencesAsync();
             Assert.IsTrue(failed.IsFaulted);
-            Assert.AreEqual("NOT_READY", ((HeroSignalException)failed.Exception!.InnerException!).Code);
+            Assert.AreEqual("NOT_READY", ((PushizoException)failed.Exception!.InnerException!).Code);
 
             _bridge.PreferencesErrorCode = null;
             _bridge.PreferencesJson = @"{""preferences"":[{""optedIn"":true}]}";
-            var invalid = HeroSignal.User.GetPreferencesAsync();
-            Assert.AreEqual(HeroSignalException.InvalidResponse, ((HeroSignalException)invalid.Exception!.InnerException!).Code);
+            var invalid = Pushizo.User.GetPreferencesAsync();
+            Assert.AreEqual(PushizoException.InvalidResponse, ((PushizoException)invalid.Exception!.InnerException!).Code);
         }
 
         [Test]
@@ -348,18 +348,18 @@ namespace HeroSignalSdk.Tests
         {
             Init();
             var calls = _bridge.Calls.Count;
-            Assert.Throws<ArgumentNullException>(() => HeroSignal.User.SetPreferencesAsync(null!));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new PreferenceInput[0]));
+            Assert.Throws<ArgumentNullException>(() => Pushizo.User.SetPreferencesAsync(null!));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetPreferencesAsync(new PreferenceInput[0]));
             var tooMany = new List<PreferenceInput>();
             for (var i = 0; i < 101; i++) tooMany.Add(new PreferenceInput("c" + i, true));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(tooMany));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput(" ", true) }));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput(new string('k', 65), true) }));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true, "push") }));
-            Assert.Throws<ArgumentException>(() => HeroSignal.User.SetPreferencesAsync(new PreferenceInput[] { null! }));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetPreferencesAsync(tooMany));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput(" ", true) }));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput(new string('k', 65), true) }));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true, "push") }));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetPreferencesAsync(new PreferenceInput[] { null! }));
             Assert.AreEqual(calls, _bridge.Calls.Count);
 
-            Assert.IsTrue(HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput(new string('k', 64), true, "sms") }).IsCompleted);
+            Assert.IsTrue(Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput(new string('k', 64), true, "sms") }).IsCompleted);
             Assert.AreEqual(calls + 1, _bridge.Calls.Count);
         }
 
@@ -368,10 +368,10 @@ namespace HeroSignalSdk.Tests
         {
             Init();
             _bridge.Calls.Clear();
-            HeroSignal.Login("user_42", jwt: "a.b.c");
-            HeroSignal.Login("user_43", "hash_abc", "a.b.c");
-            HeroSignal.Login("user_44", jwt: " ");
-            HeroSignal.UpdateUserJwt("d.e.f");
+            Pushizo.Login("user_42", jwt: "a.b.c");
+            Pushizo.Login("user_43", "hash_abc", "a.b.c");
+            Pushizo.Login("user_44", jwt: " ");
+            Pushizo.UpdateUserJwt("d.e.f");
 
             CollectionAssert.AreEqual(new[]
             {
@@ -380,15 +380,15 @@ namespace HeroSignalSdk.Tests
                 "login:user_44:<null>",
                 "updateUserJwt:d.e.f",
             }, _bridge.Calls);
-            Assert.Throws<ArgumentException>(() => HeroSignal.UpdateUserJwt(""));
+            Assert.Throws<ArgumentException>(() => Pushizo.UpdateUserJwt(""));
 
             // Yerel SDK kanıtı app kipine uygun bulmazsa veya kullanıcı yoksa hata NOT_READY olarak yansır.
             _bridge.LoginError = "Bu app için kimlik JWT'si zorunlu.";
-            var login = Assert.Throws<HeroSignalException>(() => HeroSignal.Login("user_45", "hash_abc"));
-            Assert.AreEqual(HeroSignalException.NotReady, login.Code);
+            var login = Assert.Throws<PushizoException>(() => Pushizo.Login("user_45", "hash_abc"));
+            Assert.AreEqual(PushizoException.NotReady, login.Code);
             Assert.AreEqual("Bu app için kimlik JWT'si zorunlu.", login.Message);
             _bridge.UpdateUserJwtError = "Önce login ile kullanıcı kimliklendirilmeli";
-            Assert.AreEqual(HeroSignalException.NotReady, Assert.Throws<HeroSignalException>(() => HeroSignal.UpdateUserJwt("g.h.i")).Code);
+            Assert.AreEqual(PushizoException.NotReady, Assert.Throws<PushizoException>(() => Pushizo.UpdateUserJwt("g.h.i")).Code);
         }
 
         private static Dictionary<string, object> LiveValues(params (string Key, object Value)[] pairs)
@@ -401,7 +401,7 @@ namespace HeroSignalSdk.Tests
         private static string FaultCode(System.Threading.Tasks.Task task)
         {
             Assert.IsTrue(task.IsFaulted);
-            return ((HeroSignalException)task.Exception!.InnerException!).Code;
+            return ((PushizoException)task.Exception!.InnerException!).Code;
         }
 
         [Test]
@@ -410,8 +410,8 @@ namespace HeroSignalSdk.Tests
             Init();
             _bridge.Calls.Clear();
 
-            Assert.IsTrue(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync().IsCompleted);
-            var start = HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
+            Assert.IsTrue(Pushizo.LiveActivities.SetupDefaultLiveActivityAsync().IsCompleted);
+            var start = Pushizo.LiveActivities.StartDefaultLiveActivityAsync(
                 "order:42",
                 LiveValues(("title", "Sipariş"), ("count", 3), ("big", 5000000000L), ("ratio", 0.1f), ("price", 12.5m), ("vip", true)),
                 LiveValues(("status", "yolda"), ("eta", 15.5)));
@@ -422,7 +422,7 @@ namespace HeroSignalSdk.Tests
             Assert.AreEqual(
                 @"startDefaultLiveActivity:order:42:{""title"":""Sipariş"",""count"":3,""big"":5000000000,""ratio"":0.1,""price"":12.5,""vip"":true}:{""status"":""yolda"",""eta"":15.5}",
                 _bridge.Calls[1]);
-            Assert.AreEqual("HeroSignalDefaultLiveActivityAttributes", LiveActivitiesManager.DefaultActivityType);
+            Assert.AreEqual("PushizoDefaultLiveActivityAttributes", LiveActivitiesManager.DefaultActivityType);
         }
 
         [Test]
@@ -433,31 +433,31 @@ namespace HeroSignalSdk.Tests
             var empty = new Dictionary<string, object>();
             var invalid = new List<Func<System.Threading.Tasks.Task>>
             {
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("", empty, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(null!, empty, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(new string('a', 101), empty, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("sipariş", empty, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("order 1", empty, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("order\n", empty, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", null!, empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, null!),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("herosignal", "x")), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("", "x")), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues((new string('k', 65), "x")), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("t", new string('x', 4001))), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("nested", new Dictionary<string, object>())), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("list", new[] { 1, 2 })), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("when", DateTime.UtcNow)), empty),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, LiveValues(("eta", double.NaN))),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, LiveValues(("eta", float.PositiveInfinity))),
-                () => HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, new Dictionary<string, object> { ["eta"] = null! }),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("", empty, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync(null!, empty, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync(new string('a', 101), empty, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("sipariş", empty, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("order 1", empty, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("order\n", empty, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", null!, empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, null!),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("pushizo", "x")), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("", "x")), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues((new string('k', 65), "x")), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("t", new string('x', 4001))), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("nested", new Dictionary<string, object>())), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("list", new[] { 1, 2 })), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("when", DateTime.UtcNow)), empty),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, LiveValues(("eta", double.NaN))),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, LiveValues(("eta", float.PositiveInfinity))),
+                () => Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", empty, new Dictionary<string, object> { ["eta"] = null! }),
             };
-            foreach (var call in invalid) Assert.AreEqual(HeroSignalException.InvalidArgument, FaultCode(call()));
+            foreach (var call in invalid) Assert.AreEqual(PushizoException.InvalidArgument, FaultCode(call()));
             Assert.IsEmpty(_bridge.Calls);
 
-            // herosignal yalnızca attributes içinde ayrılmıştır; sınır değerleri kabul edilir.
-            Assert.IsFalse(HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("Order_1.a:b-c", empty, LiveValues(("herosignal", "x"))).IsFaulted);
-            Assert.IsFalse(HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
+            // pushizo yalnızca attributes içinde ayrılmıştır; sınır değerleri kabul edilir.
+            Assert.IsFalse(Pushizo.LiveActivities.StartDefaultLiveActivityAsync("Order_1.a:b-c", empty, LiveValues(("pushizo", "x"))).IsFaulted);
+            Assert.IsFalse(Pushizo.LiveActivities.StartDefaultLiveActivityAsync(
                 new string('a', 100), LiveValues((new string('k', 64), new string('x', 4000))), empty).IsFaulted);
             Assert.AreEqual(2, _bridge.Calls.Count);
         }
@@ -466,15 +466,15 @@ namespace HeroSignalSdk.Tests
         public void Live_activity_native_errors_keep_code_and_message()
         {
             Init();
-            _bridge.LiveActivityErrorCode = HeroSignalException.LiveActivityFailed;
+            _bridge.LiveActivityErrorCode = PushizoException.LiveActivityFailed;
             _bridge.LiveActivityErrorMessage = "Live Activities bu cihazda kapalı";
-            var start = HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>());
+            var start = Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>());
             Assert.AreEqual("LIVE_ACTIVITY_FAILED", FaultCode(start));
             Assert.AreEqual("Live Activities bu cihazda kapalı", start.Exception!.InnerException!.Message);
 
-            _bridge.LiveActivityErrorCode = HeroSignalException.NotReady;
-            _bridge.LiveActivityErrorMessage = "HeroSignal.initialize çağrılmadı";
-            Assert.AreEqual(HeroSignalException.NotReady, FaultCode(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync()));
+            _bridge.LiveActivityErrorCode = PushizoException.NotReady;
+            _bridge.LiveActivityErrorMessage = "Pushizo.initialize çağrılmadı";
+            Assert.AreEqual(PushizoException.NotReady, FaultCode(Pushizo.LiveActivities.SetupDefaultLiveActivityAsync()));
         }
 
         [Test]
@@ -484,9 +484,9 @@ namespace HeroSignalSdk.Tests
             _bridge.Calls.Clear();
             _bridge.SupportsLiveActivities = false;
 
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync()));
-            var start = HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("title", "x")), LiveValues(("status", "y")));
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(start));
+            Assert.AreEqual(PushizoException.PlatformNotSupported, FaultCode(Pushizo.LiveActivities.SetupDefaultLiveActivityAsync()));
+            var start = Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", LiveValues(("title", "x")), LiveValues(("status", "y")));
+            Assert.AreEqual(PushizoException.PlatformNotSupported, FaultCode(start));
             Assert.AreEqual("Live Activities yalnızca iOS'ta desteklenir.", start.Exception!.InnerException!.Message);
             Assert.IsEmpty(_bridge.Calls);
         }
@@ -494,9 +494,9 @@ namespace HeroSignalSdk.Tests
         [Test]
         public void Live_activities_before_initialize_throw()
         {
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync());
+            Assert.Throws<InvalidOperationException>(() => Pushizo.LiveActivities.SetupDefaultLiveActivityAsync());
             Assert.Throws<InvalidOperationException>(() =>
-                HeroSignal.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>()));
+                Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>()));
         }
 
         [Test]
@@ -504,21 +504,21 @@ namespace HeroSignalSdk.Tests
         {
             Init();
             _bridge.Calls.Clear();
-            Assert.IsFalse(HeroSignal.Location.IsShared);
+            Assert.IsFalse(Pushizo.Location.IsShared);
 
-            HeroSignal.Location.SetShared(true);
-            Assert.IsTrue(HeroSignal.Location.IsShared);
-            HeroSignal.Location.SetShared(false);
-            Assert.IsFalse(HeroSignal.Location.IsShared);
+            Pushizo.Location.SetShared(true);
+            Assert.IsTrue(Pushizo.Location.IsShared);
+            Pushizo.Location.SetShared(false);
+            Assert.IsFalse(Pushizo.Location.IsShared);
 
-            var granted = HeroSignal.Location.RequestPermissionAsync(" Yakındaki mağazalar için ");
+            var granted = Pushizo.Location.RequestPermissionAsync(" Yakındaki mağazalar için ");
             Assert.IsTrue(granted.IsCompleted);
             Assert.IsTrue(granted.Result);
 
             // Boş/yalnızca boşluk açıklama yerel SDK'nın varsayılan metnine düşer (null iletilir).
             _bridge.LocationPermissionResult = false;
-            Assert.IsFalse(HeroSignal.Location.RequestPermissionAsync().Result);
-            Assert.IsFalse(HeroSignal.Location.RequestPermissionAsync("  ").Result);
+            Assert.IsFalse(Pushizo.Location.RequestPermissionAsync().Result);
+            Assert.IsFalse(Pushizo.Location.RequestPermissionAsync("  ").Result);
 
             CollectionAssert.AreEqual(new[]
             {
@@ -533,53 +533,53 @@ namespace HeroSignalSdk.Tests
         [Test]
         public void Location_before_initialize_throws_and_reads_are_safe()
         {
-            Assert.IsFalse(HeroSignal.Location.IsShared);
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.Location.SetShared(true));
-            Assert.Throws<InvalidOperationException>(() => HeroSignal.Location.RequestPermissionAsync());
+            Assert.IsFalse(Pushizo.Location.IsShared);
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Location.SetShared(true));
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Location.RequestPermissionAsync());
             Assert.IsEmpty(_bridge.Calls);
         }
 
         [Test]
         public void Editor_bridge_keeps_location_preference_in_memory_and_denies_permission()
         {
-            HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+            Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
             Init();
-            Assert.IsFalse(HeroSignal.Location.IsShared);
-            HeroSignal.Location.SetShared(true);
-            Assert.IsTrue(HeroSignal.Location.IsShared);
-            var permission = HeroSignal.Location.RequestPermissionAsync("Konum açıklaması");
+            Assert.IsFalse(Pushizo.Location.IsShared);
+            Pushizo.Location.SetShared(true);
+            Assert.IsTrue(Pushizo.Location.IsShared);
+            var permission = Pushizo.Location.RequestPermissionAsync("Konum açıklaması");
             Assert.IsTrue(permission.IsCompleted);
             Assert.IsFalse(permission.Result);
-            HeroSignal.Location.SetShared(false);
-            Assert.IsFalse(HeroSignal.Location.IsShared);
+            Pushizo.Location.SetShared(false);
+            Assert.IsFalse(Pushizo.Location.IsShared);
         }
 
         [Test]
         public void Editor_bridge_simulates_state_without_native_sdk()
         {
-            HeroSignal.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+            Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
             Init();
-            Assert.IsFalse(HeroSignal.IsSupported);
-            Assert.Throws<HeroSignalException>(() => HeroSignal.UpdateUserJwt("a.b.c"));
-            HeroSignal.Login("user_1");
-            HeroSignal.UpdateUserJwt("a.b.c");
-            HeroSignal.User.AddTags(new Dictionary<string, string> { ["plan"] = "pro" });
-            HeroSignal.User.AddEmail("ali@example.com");
-            HeroSignal.InAppMessages.AddTrigger("level", "gold");
+            Assert.IsFalse(Pushizo.IsSupported);
+            Assert.Throws<PushizoException>(() => Pushizo.UpdateUserJwt("a.b.c"));
+            Pushizo.Login("user_1");
+            Pushizo.UpdateUserJwt("a.b.c");
+            Pushizo.User.AddTags(new Dictionary<string, string> { ["plan"] = "pro" });
+            Pushizo.User.AddEmail("ali@example.com");
+            Pushizo.InAppMessages.AddTrigger("level", "gold");
 
-            Assert.AreEqual("user_1", HeroSignal.User.ExternalId);
-            Assert.AreEqual("pro", HeroSignal.User.GetTags()["plan"]);
-            CollectionAssert.AreEqual(new[] { "ali@example.com" }, HeroSignal.User.Emails);
-            Assert.AreEqual("gold", HeroSignal.InAppMessages.GetTriggers()["level"]);
-            Assert.IsFalse(HeroSignal.Notifications.RequestPermissionAsync().Result);
-            var inbox = HeroSignal.Inbox.ListAsync();
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)inbox.Exception!.InnerException!).Code);
-            var preferences = HeroSignal.User.GetPreferencesAsync();
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)preferences.Exception!.InnerException!).Code);
-            var setPreferences = HeroSignal.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true) });
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, ((HeroSignalException)setPreferences.Exception!.InnerException!).Code);
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(HeroSignal.LiveActivities.SetupDefaultLiveActivityAsync()));
-            Assert.AreEqual(HeroSignalException.PlatformNotSupported, FaultCode(HeroSignal.LiveActivities.StartDefaultLiveActivityAsync(
+            Assert.AreEqual("user_1", Pushizo.User.ExternalId);
+            Assert.AreEqual("pro", Pushizo.User.GetTags()["plan"]);
+            CollectionAssert.AreEqual(new[] { "ali@example.com" }, Pushizo.User.Emails);
+            Assert.AreEqual("gold", Pushizo.InAppMessages.GetTriggers()["level"]);
+            Assert.IsFalse(Pushizo.Notifications.RequestPermissionAsync().Result);
+            var inbox = Pushizo.Inbox.ListAsync();
+            Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)inbox.Exception!.InnerException!).Code);
+            var preferences = Pushizo.User.GetPreferencesAsync();
+            Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)preferences.Exception!.InnerException!).Code);
+            var setPreferences = Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true) });
+            Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)setPreferences.Exception!.InnerException!).Code);
+            Assert.AreEqual(PushizoException.PlatformNotSupported, FaultCode(Pushizo.LiveActivities.SetupDefaultLiveActivityAsync()));
+            Assert.AreEqual(PushizoException.PlatformNotSupported, FaultCode(Pushizo.LiveActivities.StartDefaultLiveActivityAsync(
                 "a1", LiveValues(("title", "x")), LiveValues(("status", "y")))));
         }
     }

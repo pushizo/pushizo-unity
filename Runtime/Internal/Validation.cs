@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
     /// Girdi doğrulama ve normalizasyon; kurallar yerel SDK'lar ve sunucu ile aynıdır.
@@ -135,10 +135,10 @@ namespace HeroSignalSdk.Internal
 
         /// <summary>
         /// Live Activity alanlarını doğrular ve normalize eder: anahtar 1-64 karakter, değer metin (en çok 4000 karakter),
-        /// sonlu sayı (tam sayılar long, diğerleri double) veya bool. <paramref name="reserveHeroSignalKey"/> true ise
-        /// (<c>attributes</c>) <c>herosignal</c> anahtarı sunucu verisi için ayrılmıştır. Hata: <c>INVALID_ARGUMENT</c>.
+        /// sonlu sayı (tam sayılar long, diğerleri double) veya bool. <paramref name="reservePushizoKey"/> true ise
+        /// (<c>attributes</c>) <c>pushizo</c> anahtarı sunucu verisi için ayrılmıştır. Hata: <c>INVALID_ARGUMENT</c>.
         /// </summary>
-        public static Dictionary<string, object?> NormalizeLiveActivityValues(IDictionary<string, object> values, string paramName, bool reserveHeroSignalKey)
+        public static Dictionary<string, object?> NormalizeLiveActivityValues(IDictionary<string, object> values, string paramName, bool reservePushizoKey)
         {
             if (values is null) throw InvalidLiveActivity($"{paramName} gerekli.");
             var result = new Dictionary<string, object?>(values.Count, StringComparer.Ordinal);
@@ -146,8 +146,8 @@ namespace HeroSignalSdk.Internal
             {
                 if (string.IsNullOrEmpty(pair.Key) || pair.Key.Length > MaxLiveActivityKeyLength)
                     throw InvalidLiveActivity($"{paramName} anahtarları 1-{MaxLiveActivityKeyLength} karakter olmalı.");
-                if (reserveHeroSignalKey && pair.Key == "herosignal")
-                    throw InvalidLiveActivity($"{paramName} içinde 'herosignal' anahtarı ayrılmıştır.");
+                if (reservePushizoKey && pair.Key == "pushizo")
+                    throw InvalidLiveActivity($"{paramName} içinde 'pushizo' anahtarı ayrılmıştır.");
                 result[pair.Key] = NormalizeLiveActivityValue(pair.Value) ??
                     throw InvalidLiveActivity($"{paramName}[\"{pair.Key}\"] metin (en çok {MaxLiveActivityStringLength} karakter), sonlu sayı veya bool olmalı.");
             }
@@ -180,8 +180,8 @@ namespace HeroSignalSdk.Internal
             }
         }
 
-        private static HeroSignalException InvalidLiveActivity(string message) =>
-            new HeroSignalException(HeroSignalException.InvalidArgument, message);
+        private static PushizoException InvalidLiveActivity(string message) =>
+            new PushizoException(PushizoException.InvalidArgument, message);
 
         public const int MaxPreferencesPerRequest = 100;
 

@@ -1,10 +1,10 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using HeroSignalSdk.Internal;
+using PushizoSdk.Internal;
 using NUnit.Framework;
 
-namespace HeroSignalSdk.Tests
+namespace PushizoSdk.Tests
 {
     /// <summary>JSON yardımcısı ve normalizasyon (vektörler sdk/testdata/messaging-vectors.json ile aynı).</summary>
     public sealed class JsonAndValidationTests

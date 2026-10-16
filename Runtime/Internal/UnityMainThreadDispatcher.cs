@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using UnityEngine;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
     /// Gizli, sahneler arası kalıcı MonoBehaviour: kuyruğu her karede boşaltır. Ana iş parçacığından gelen iş hemen
@@ -15,10 +15,10 @@ namespace HeroSignalSdk.Internal
         private readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
         private int _mainThreadId;
 
-        /// <summary>Ana iş parçacığından çağrılmalıdır (HeroSignal.Initialize).</summary>
+        /// <summary>Ana iş parçacığından çağrılmalıdır (Pushizo.Initialize).</summary>
         public static UnityMainThreadDispatcher Create()
         {
-            var go = new GameObject("HeroSignalDispatcher") { hideFlags = HideFlags.HideAndDontSave };
+            var go = new GameObject("PushizoDispatcher") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(go);
             var dispatcher = go.AddComponent<UnityMainThreadDispatcher>();
             dispatcher._mainThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -48,7 +48,7 @@ namespace HeroSignalSdk.Internal
             }
             catch (Exception e)
             {
-                SdkLog.Write(LogLevel.Error, "HeroSignal olayı işlenemedi", e);
+                SdkLog.Write(LogLevel.Error, "Pushizo olayı işlenemedi", e);
             }
         }
     }

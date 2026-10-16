@@ -1,22 +1,22 @@
 using System;
 using System.Collections.Generic;
-using HeroSignalSdk;
+using PushizoSdk;
 using UnityEngine;
 
-namespace HeroSignalSdk.Samples
+namespace PushizoSdk.Samples
 {
     /// <summary>
-    /// HeroSignal demo: boş bir sahnede bir GameObject'e ekleyin ve App ID'yi Inspector'dan girin. IMGUI ile tek ekran:
+    /// Pushizo demo: boş bir sahnede bir GameObject'e ekleyin ve App ID'yi Inspector'dan girin. IMGUI ile tek ekran:
     /// izin, push aboneliği aç/kapa, kimlik, dil, tag/alias, e-posta/SMS, olay, in-app tetik, ön plan gösterimi, bildirim
     /// kutusu ve olay günlüğü.
     /// Metinler sistem diline göre Türkçe/İngilizce; arayüz koyu temadır.
     /// </summary>
-    public sealed class HeroSignalDemo : MonoBehaviour
+    public sealed class PushizoDemo : MonoBehaviour
     {
         [Tooltip("Dashboard'daki uygulama kimliği (app_…).")]
         [SerializeField] private string appId = "app_01M4884V0AAMP3Z9RF8R8NFN7A";
 
-        [Tooltip("HeroSignal API adresi (Android emülatörü → ana makine: http://10.0.2.2:4000).")]
+        [Tooltip("Pushizo API adresi (Android emülatörü → ana makine: http://10.0.2.2:4000).")]
         [SerializeField] private string apiUrl = "http://10.0.2.2:4000";
 
         private readonly List<string> _log = new List<string>();
@@ -98,20 +98,20 @@ namespace HeroSignalSdk.Samples
 
         private void Awake()
         {
-            HeroSignal.Debug.SetLogLevel(LogLevel.Debug);
-            HeroSignal.Initialize(appId, new HeroSignalOptions { ApiUrl = apiUrl });
+            Pushizo.Debug.SetLogLevel(LogLevel.Debug);
+            Pushizo.Initialize(appId, new PushizoOptions { ApiUrl = apiUrl });
 
-            HeroSignal.User.PushSubscription.Changed += e => Log($"subscription: {e.Current.Id ?? "-"} (opted in: {e.Current.OptedIn})");
-            HeroSignal.Notifications.PermissionChanged += granted => Log($"permission: {granted}");
-            HeroSignal.Notifications.Clicked += e => Log($"click: {e.Notification.Title ?? "-"} · {e.ActionId ?? "-"} · {e.Url ?? "-"}");
-            HeroSignal.Notifications.ForegroundWillDisplay += e =>
+            Pushizo.User.PushSubscription.Changed += e => Log($"subscription: {e.Current.Id ?? "-"} (opted in: {e.Current.OptedIn})");
+            Pushizo.Notifications.PermissionChanged += granted => Log($"permission: {granted}");
+            Pushizo.Notifications.Clicked += e => Log($"click: {e.Notification.Title ?? "-"} · {e.ActionId ?? "-"} · {e.Url ?? "-"}");
+            Pushizo.Notifications.ForegroundWillDisplay += e =>
             {
                 if (!_showInForeground) e.PreventDefault();
                 Log($"foreground: {e.Notification.Title ?? "-"} (prevented: {e.IsPrevented})");
             };
-            HeroSignal.InAppMessages.Clicked += e => Log($"in-app click: {e.MessageId} · {e.ActionId}");
-            HeroSignal.InAppMessages.DidDisplay += e => Log($"in-app shown: {e.Message.Id}");
-            HeroSignal.InAppMessages.SetScreen("demo");
+            Pushizo.InAppMessages.Clicked += e => Log($"in-app click: {e.MessageId} · {e.ActionId}");
+            Pushizo.InAppMessages.DidDisplay += e => Log($"in-app shown: {e.Message.Id}");
+            Pushizo.InAppMessages.SetScreen("demo");
 
             _background = new Texture2D(1, 1);
             _background.SetPixel(0, 0, new Color(0.07f, 0.08f, 0.09f));
@@ -144,7 +144,7 @@ namespace HeroSignalSdk.Samples
 
         private async void RequestPermission()
         {
-            var granted = await HeroSignal.Notifications.RequestPermissionAsync(fallbackToSettings: true);
+            var granted = await Pushizo.Notifications.RequestPermissionAsync(fallbackToSettings: true);
             Log($"permission: {granted}");
         }
 
@@ -154,13 +154,13 @@ namespace HeroSignalSdk.Samples
             _inboxError = null;
             try
             {
-                var page = await HeroSignal.Inbox.ListAsync(20);
+                var page = await Pushizo.Inbox.ListAsync(20);
                 _inbox.Clear();
                 _inbox.AddRange(page.Items);
             }
-            catch (HeroSignalException e)
+            catch (PushizoException e)
             {
-                _inboxError = e.Code == HeroSignalException.NotReady ? T("notReady") : string.Format(T("error"), e.Message);
+                _inboxError = e.Code == PushizoException.NotReady ? T("notReady") : string.Format(T("error"), e.Message);
             }
             finally
             {
@@ -175,7 +175,7 @@ namespace HeroSignalSdk.Samples
                 await action();
                 LoadInbox();
             }
-            catch (HeroSignalException e)
+            catch (PushizoException e)
             {
                 _inboxError = string.Format(T("error"), e.Message);
             }
@@ -190,42 +190,42 @@ namespace HeroSignalSdk.Samples
             GUILayout.BeginArea(new Rect(16, 16, width, Screen.height / scale - 32f));
             _scroll = GUILayout.BeginScrollView(_scroll);
 
-            var s = HeroSignal.User.PushSubscription.Current;
-            GUILayout.Label(string.Format(T("status"), HeroSignal.Notifications.Permission, s.Id ?? "-", HeroSignal.User.ExternalId ?? "-"));
+            var s = Pushizo.User.PushSubscription.Current;
+            GUILayout.Label(string.Format(T("status"), Pushizo.Notifications.Permission, s.Id ?? "-", Pushizo.User.ExternalId ?? "-"));
 
             if (GUILayout.Button(T("permission"))) RequestPermission();
             // Opt-out: izin korunur ama push gönderilmez; opt-in yeniden açar.
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(T("optIn"))) Run(HeroSignal.User.PushSubscription.OptIn);
-            if (GUILayout.Button(T("optOut"))) Run(HeroSignal.User.PushSubscription.OptOut);
+            if (GUILayout.Button(T("optIn"))) Run(Pushizo.User.PushSubscription.OptIn);
+            if (GUILayout.Button(T("optOut"))) Run(Pushizo.User.PushSubscription.OptOut);
             GUILayout.EndHorizontal();
             _showInForeground = GUILayout.Toggle(_showInForeground, T("foreground"));
-            if (GUILayout.Button(T("clear"))) Run(() => HeroSignal.Notifications.ClearAll());
+            if (GUILayout.Button(T("clear"))) Run(() => Pushizo.Notifications.ClearAll());
 
             GUILayout.Label(T("externalId"));
             _externalId = GUILayout.TextField(_externalId);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(T("login"))) Run(() => HeroSignal.Login(_externalId.Trim()));
-            if (GUILayout.Button(T("logout"))) Run(HeroSignal.Logout);
+            if (GUILayout.Button(T("login"))) Run(() => Pushizo.Login(_externalId.Trim()));
+            if (GUILayout.Button(T("logout"))) Run(Pushizo.Logout);
             GUILayout.EndHorizontal();
             // Dil, segmentlemede ve çok dilli bildirim içeriğinin seçiminde kullanılır (ISO 639-1).
-            if (GUILayout.Button(T("language"))) Run(() => HeroSignal.User.SetLanguage("tr"));
+            if (GUILayout.Button(T("language"))) Run(() => Pushizo.User.SetLanguage("tr"));
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(T("tag"))) Run(() => HeroSignal.User.AddTag("plan", "pro"));
-            if (GUILayout.Button(T("alias"))) Run(() => HeroSignal.User.AddAlias("crm_id", "42"));
+            if (GUILayout.Button(T("tag"))) Run(() => Pushizo.User.AddTag("plan", "pro"));
+            if (GUILayout.Button(T("alias"))) Run(() => Pushizo.User.AddAlias("crm_id", "42"));
             GUILayout.EndHorizontal();
 
             GUILayout.Label(T("contact"));
             _contact = GUILayout.TextField(_contact);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(T("email"))) Run(() => HeroSignal.User.AddEmail(_contact));
-            if (GUILayout.Button(T("sms"))) Run(() => HeroSignal.User.AddSms(_contact));
+            if (GUILayout.Button(T("email"))) Run(() => Pushizo.User.AddEmail(_contact));
+            if (GUILayout.Button(T("sms"))) Run(() => Pushizo.User.AddSms(_contact));
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(T("event"))) Run(() => HeroSignal.Session.SendEvent("cart_viewed", new Dictionary<string, object> { ["items"] = 2 }));
-            if (GUILayout.Button(T("trigger"))) Run(() => HeroSignal.InAppMessages.AddTrigger("level", "gold"));
+            if (GUILayout.Button(T("event"))) Run(() => Pushizo.Session.SendEvent("cart_viewed", new Dictionary<string, object> { ["items"] = 2 }));
+            if (GUILayout.Button(T("trigger"))) Run(() => Pushizo.InAppMessages.AddTrigger("level", "gold"));
             GUILayout.EndHorizontal();
 
             if (GUILayout.Button(T("inbox")))
@@ -247,7 +247,7 @@ namespace HeroSignalSdk.Samples
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(T("refresh"))) LoadInbox();
-            if (GUILayout.Button(T("readAll"))) InboxAction(HeroSignal.Inbox.MarkAllReadAsync);
+            if (GUILayout.Button(T("readAll"))) InboxAction(Pushizo.Inbox.MarkAllReadAsync);
             GUILayout.EndHorizontal();
 
             if (_inboxLoading) GUILayout.Label(T("loading"));
@@ -259,8 +259,8 @@ namespace HeroSignalSdk.Samples
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Label((item.Read ? "  " : "● ") + (item.Title ?? "-") + "\n" + (item.Body ?? string.Empty));
-                    if (!item.Read && GUILayout.Button(T("read"), GUILayout.Width(90))) InboxAction(() => HeroSignal.Inbox.MarkReadAsync(item.Id));
-                    if (GUILayout.Button(T("archive"), GUILayout.Width(90))) InboxAction(() => HeroSignal.Inbox.ArchiveAsync(item.Id));
+                    if (!item.Read && GUILayout.Button(T("read"), GUILayout.Width(90))) InboxAction(() => Pushizo.Inbox.MarkReadAsync(item.Id));
+                    if (GUILayout.Button(T("archive"), GUILayout.Width(90))) InboxAction(() => Pushizo.Inbox.ArchiveAsync(item.Id));
                     GUILayout.EndHorizontal();
                 }
             }

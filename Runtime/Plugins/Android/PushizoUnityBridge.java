@@ -1,4 +1,4 @@
-package com.herosignal.unity;
+package com.pushizo.unity;
 
 import android.Manifest;
 import android.app.Activity;
@@ -17,21 +17,21 @@ import android.provider.Settings;
 
 import androidx.core.app.ActivityCompat;
 
-import com.herosignal.sdk.HeroSignal;
-import com.herosignal.sdk.HsAction;
-import com.herosignal.sdk.HsApiException;
-import com.herosignal.sdk.HsForegroundEvent;
-import com.herosignal.sdk.HsInAppLifecycleEvent;
-import com.herosignal.sdk.HsInAppLifecycleListener;
-import com.herosignal.sdk.HsInboxItem;
-import com.herosignal.sdk.HsInboxPage;
-import com.herosignal.sdk.HsLog;
-import com.herosignal.sdk.HsMessageCategory;
-import com.herosignal.sdk.HsNotification;
-import com.herosignal.sdk.HsPreference;
-import com.herosignal.sdk.HsPreferenceInput;
-import com.herosignal.sdk.HsPreferencesResult;
-import com.herosignal.sdk.HsPushSubscriptionState;
+import com.pushizo.sdk.Pushizo;
+import com.pushizo.sdk.HsAction;
+import com.pushizo.sdk.HsApiException;
+import com.pushizo.sdk.HsForegroundEvent;
+import com.pushizo.sdk.HsInAppLifecycleEvent;
+import com.pushizo.sdk.HsInAppLifecycleListener;
+import com.pushizo.sdk.HsInboxItem;
+import com.pushizo.sdk.HsInboxPage;
+import com.pushizo.sdk.HsLog;
+import com.pushizo.sdk.HsMessageCategory;
+import com.pushizo.sdk.HsNotification;
+import com.pushizo.sdk.HsPreference;
+import com.pushizo.sdk.HsPreferenceInput;
+import com.pushizo.sdk.HsPreferencesResult;
+import com.pushizo.sdk.HsPushSubscriptionState;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -59,12 +59,12 @@ import kotlin.coroutines.intrinsics.IntrinsicsKt;
  * Kotlin SDK'nın `suspend` bildirim kutusu fonksiyonları Java'dan Continuation ile çağrılır (Kotlin `Result` parametreli
  * HsCallback Java'dan uygulanamaz). Unity Gradle derlemesinde Kotlin eklentisi gerekmez.
  */
-public final class HeroSignalUnityBridge {
+public final class PushizoUnityBridge {
     private static final int MAX_PENDING_FOREGROUND = 32;
     /** İzin iletişim kutusu açılmazsa (kalıcı ret) sonucun bildirileceği süre. */
     private static final long PERMISSION_NO_DIALOG_TIMEOUT_MS = 1000;
 
-    private static volatile HeroSignalUnityListener listener;
+    private static volatile PushizoUnityListener listener;
     private static volatile Context appContext;
     private static volatile boolean listenersRegistered;
     private static volatile boolean foregroundHandlerEnabled;
@@ -80,7 +80,7 @@ public final class HeroSignalUnityBridge {
     };
 
     private static final Object PERMISSION_LOCK = new Object();
-    private static final List<HeroSignalUnityPermissionCallback> PERMISSION_CALLBACKS = new ArrayList<>();
+    private static final List<PushizoUnityPermissionCallback> PERMISSION_CALLBACKS = new ArrayList<>();
     private static boolean permissionPending;
     private static boolean permissionFallbackToSettings;
     private static boolean pausedSinceRequest;
@@ -88,14 +88,14 @@ public final class HeroSignalUnityBridge {
 
     /** Konum izni isteği: açıklama diyaloğu → sistem izni → sonuç (bildirim izniyle aynı ön plana dönüş deseni). */
     private static final Object LOCATION_LOCK = new Object();
-    private static final List<HeroSignalUnityPermissionCallback> LOCATION_CALLBACKS = new ArrayList<>();
+    private static final List<PushizoUnityPermissionCallback> LOCATION_CALLBACKS = new ArrayList<>();
     private static final int LOCATION_IDLE = 0;
     private static final int LOCATION_RATIONALE = 1;
     private static final int LOCATION_SYSTEM = 2;
     private static int locationPhase = LOCATION_IDLE;
     private static boolean locationPausedSinceRequest;
 
-    private HeroSignalUnityBridge() {
+    private PushizoUnityBridge() {
     }
 
     private static final HsInAppLifecycleListener IN_APP_LIFECYCLE = new HsInAppLifecycleListener() {
@@ -153,7 +153,7 @@ public final class HeroSignalUnityBridge {
      * Yerel SDK izin gözlemcisi → {@code permission} olayı ({@code {"permission":bool}}): izin isteği sonucu ve uygulama
      * ön plana döndüğünde (izin sistem ayarlarından değişmiş olabilir) etkin izin değiştiyse çağrılır.
      */
-    private static final HeroSignal.Notifications.PermissionObserver PERMISSION_OBSERVER =
+    private static final Pushizo.Notifications.PermissionObserver PERMISSION_OBSERVER =
             granted -> emit("permission", object("permission", granted));
 
     // --- Başlatma ---
@@ -162,38 +162,38 @@ public final class HeroSignalUnityBridge {
      * Yerel SDK'yı başlatır ve dinleyicileri (bir kez) bağlar. optionsJson: apiUrl, requiresPrivacyConsent,
      * logLevel (0-4), androidDefaultChannelName, androidDefaultChannelId.
      */
-    public static void start(Activity activity, String appId, String optionsJson, HeroSignalUnityListener l) {
+    public static void start(Activity activity, String appId, String optionsJson, PushizoUnityListener l) {
         JSONObject o = parseObject(optionsJson);
         Context ctx = activity.getApplicationContext();
         listener = l;
         appContext = ctx;
-        HeroSignal.Options defaults = new HeroSignal.Options();
-        HeroSignal.Options options = new HeroSignal.Options(
+        Pushizo.Options defaults = new Pushizo.Options();
+        Pushizo.Options options = new Pushizo.Options(
                 nonBlank(o.optString("apiUrl"), defaults.getApiUrl()),
                 o.optBoolean("requiresPrivacyConsent", false),
                 logLevel(o.optInt("logLevel", HsLog.Level.WARN.getPriority())),
                 nonBlank(o.optString("androidDefaultChannelName"), defaults.getDefaultChannelName()),
                 nonBlank(o.optString("androidDefaultChannelId"), defaults.getDefaultChannelId()));
-        HeroSignal.initialize(ctx, appId, options);
+        Pushizo.initialize(ctx, appId, options);
         if (!listenersRegistered) {
             listenersRegistered = true;
             if (ctx instanceof Application) ((Application) ctx).registerActivityLifecycleCallbacks(ACTIVITY_CALLBACKS);
-            HeroSignal.User.pushSubscription.addObserver(state -> {
+            Pushizo.User.pushSubscription.addObserver(state -> {
                 emit("subscription", subscriptionJson(state));
                 return Unit.INSTANCE;
             });
-            HeroSignal.Notifications.addPermissionObserver(PERMISSION_OBSERVER);
-            HeroSignal.Notifications.addForegroundLifecycleListener(event -> {
+            Pushizo.Notifications.addPermissionObserver(PERMISSION_OBSERVER);
+            Pushizo.Notifications.addForegroundLifecycleListener(event -> {
                 onForeground(event);
                 return Unit.INSTANCE;
             });
-            HeroSignal.InAppMessages.addClickListener(event -> {
+            Pushizo.InAppMessages.addClickListener(event -> {
                 emit("inAppClick", object("messageId", event.getMessageId(), "actionId", event.getActionId(), "url", event.getUrl()));
                 return Unit.INSTANCE;
             });
-            HeroSignal.InAppMessages.addLifecycleListener(IN_APP_LIFECYCLE);
+            Pushizo.InAppMessages.addLifecycleListener(IN_APP_LIFECYCLE);
             // En son: uygulamayı açan (bekleyen) tıklama bu çağrıda iletilir.
-            HeroSignal.Notifications.addClickListener(event -> {
+            Pushizo.Notifications.addClickListener(event -> {
                 JSONObject payload = object("actionId", event.getActionId(), "url", event.getUrl());
                 put(payload, "notification", notificationJson(event.getNotification()));
                 emit("click", payload);
@@ -202,7 +202,7 @@ public final class HeroSignalUnityBridge {
         }
     }
 
-    public static void setConsentGiven(boolean given) { HeroSignal.setConsentGiven(given); }
+    public static void setConsentGiven(boolean given) { Pushizo.setConsentGiven(given); }
 
     /**
      * identityHash/jwt boşsa yok sayılır (Unity JNI çağrıları null metin geçiremez). Kanıt app'in kimlik doğrulama kipine
@@ -210,7 +210,7 @@ public final class HeroSignalUnityBridge {
      */
     public static String login(String externalId, String identityHash, String jwt) {
         try {
-            HeroSignal.login(externalId, emptyToNull(identityHash), emptyToNull(jwt));
+            Pushizo.login(externalId, emptyToNull(identityHash), emptyToNull(jwt));
             return null;
         } catch (IllegalStateException | IllegalArgumentException e) {
             return e.getMessage() != null ? e.getMessage() : "kimlik doğrulama hatası";
@@ -220,74 +220,74 @@ public final class HeroSignalUnityBridge {
     /** Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda null. */
     public static String updateUserJwt(String jwt) {
         try {
-            HeroSignal.updateUserJwt(jwt);
+            Pushizo.updateUserJwt(jwt);
             return null;
         } catch (IllegalStateException | IllegalArgumentException e) {
             return e.getMessage() != null ? e.getMessage() : "kimlik doğrulama hatası";
         }
     }
 
-    public static void logout() { HeroSignal.logout(); }
+    public static void logout() { Pushizo.logout(); }
 
     /** 0 none, 1 error, 2 warn, 3 info, 4 debug. */
-    public static void applyLogLevel(int level) { HeroSignal.Debug.setLogLevel(logLevel(level)); }
+    public static void applyLogLevel(int level) { Pushizo.Debug.setLogLevel(logLevel(level)); }
 
     // --- Kullanıcı ---
 
-    public static String externalId() { return HeroSignal.User.INSTANCE.getExternalId(); }
+    public static String externalId() { return Pushizo.User.INSTANCE.getExternalId(); }
 
-    public static String userId() { return HeroSignal.User.INSTANCE.getId(); }
+    public static String userId() { return Pushizo.User.INSTANCE.getId(); }
 
-    public static void addTags(String tagsJson) { HeroSignal.User.addTags(stringMap(tagsJson)); }
+    public static void addTags(String tagsJson) { Pushizo.User.addTags(stringMap(tagsJson)); }
 
-    public static void removeTags(String keysJson) { HeroSignal.User.removeTags(stringList(keysJson)); }
+    public static void removeTags(String keysJson) { Pushizo.User.removeTags(stringList(keysJson)); }
 
-    public static String tags() { return new JSONObject(HeroSignal.User.getTags()).toString(); }
+    public static String tags() { return new JSONObject(Pushizo.User.getTags()).toString(); }
 
-    public static void addAliases(String aliasesJson) { HeroSignal.User.addAliases(stringMap(aliasesJson)); }
+    public static void addAliases(String aliasesJson) { Pushizo.User.addAliases(stringMap(aliasesJson)); }
 
-    public static void removeAlias(String label) { HeroSignal.User.removeAlias(label); }
+    public static void removeAlias(String label) { Pushizo.User.removeAlias(label); }
 
-    public static void setLanguage(String code) { HeroSignal.User.setLanguage(code); }
+    public static void setLanguage(String code) { Pushizo.User.setLanguage(code); }
 
-    public static void addEmail(String email) { HeroSignal.User.addEmail(email); }
+    public static void addEmail(String email) { Pushizo.User.addEmail(email); }
 
-    public static void removeEmail(String email) { HeroSignal.User.removeEmail(email); }
+    public static void removeEmail(String email) { Pushizo.User.removeEmail(email); }
 
-    public static void addSms(String phoneNumber) { HeroSignal.User.addSms(phoneNumber); }
+    public static void addSms(String phoneNumber) { Pushizo.User.addSms(phoneNumber); }
 
-    public static void removeSms(String phoneNumber) { HeroSignal.User.removeSms(phoneNumber); }
+    public static void removeSms(String phoneNumber) { Pushizo.User.removeSms(phoneNumber); }
 
-    public static String emails() { return new JSONArray(HeroSignal.User.INSTANCE.getEmails()).toString(); }
+    public static String emails() { return new JSONArray(Pushizo.User.INSTANCE.getEmails()).toString(); }
 
-    public static String smsNumbers() { return new JSONArray(HeroSignal.User.INSTANCE.getSmsNumbers()).toString(); }
+    public static String smsNumbers() { return new JSONArray(Pushizo.User.INSTANCE.getSmsNumbers()).toString(); }
 
     // --- Push aboneliği ve izin ---
 
     public static String pushSubscription() {
-        return subscriptionJson(HeroSignal.User.pushSubscription.INSTANCE.getState()).toString();
+        return subscriptionJson(Pushizo.User.pushSubscription.INSTANCE.getState()).toString();
     }
 
-    public static void optIn() { HeroSignal.User.pushSubscription.optIn(); }
+    public static void optIn() { Pushizo.User.pushSubscription.optIn(); }
 
-    public static void optOut() { HeroSignal.User.pushSubscription.optOut(); }
+    public static void optOut() { Pushizo.User.pushSubscription.optOut(); }
 
-    public static boolean permission() { return HeroSignal.Notifications.INSTANCE.getPermission(); }
+    public static boolean permission() { return Pushizo.Notifications.INSTANCE.getPermission(); }
 
     /**
      * Android 13+ bildirim iznini ister. Sonuç, izin iletişim kutusu kapanıp etkinlik ön plana döndüğünde bildirilir;
      * iletişim kutusu açılmazsa (kalıcı ret) kısa süre sonra güncel durumla bildirilir. fallbackToSettings: izin kalıcı
      * olarak reddedilmişse uygulamanın bildirim ayarları açılır.
      */
-    public static void requestPermission(Activity activity, boolean fallbackToSettings, HeroSignalUnityPermissionCallback callback) {
-        if (HeroSignal.Notifications.INSTANCE.getPermission()) {
+    public static void requestPermission(Activity activity, boolean fallbackToSettings, PushizoUnityPermissionCallback callback) {
+        if (Pushizo.Notifications.INSTANCE.getPermission()) {
             callback.onResult(true);
             return;
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || activity == null) {
             // Android 12 ve öncesinde çalışma zamanı izni yoktur; bildirimler kapalıysa yalnızca ayarlardan açılabilir.
             if (fallbackToSettings) openNotificationSettings(activity != null ? activity : appContext);
-            callback.onResult(HeroSignal.Notifications.INSTANCE.getPermission());
+            callback.onResult(Pushizo.Notifications.INSTANCE.getPermission());
             return;
         }
         synchronized (PERMISSION_LOCK) {
@@ -298,7 +298,7 @@ public final class HeroSignalUnityBridge {
             pausedSinceRequest = false;
             permissionActivity = new WeakReference<>(activity);
         }
-        activity.runOnUiThread(() -> HeroSignal.Notifications.requestPermission(activity));
+        activity.runOnUiThread(() -> Pushizo.Notifications.requestPermission(activity));
         MAIN.postDelayed(() -> {
             boolean noDialog;
             synchronized (PERMISSION_LOCK) {
@@ -309,7 +309,7 @@ public final class HeroSignalUnityBridge {
     }
 
     private static void resolvePermissionRequest() {
-        List<HeroSignalUnityPermissionCallback> callbacks;
+        List<PushizoUnityPermissionCallback> callbacks;
         boolean fallback;
         Activity activity;
         synchronized (PERMISSION_LOCK) {
@@ -323,14 +323,14 @@ public final class HeroSignalUnityBridge {
             permissionActivity = null;
         }
         // İzin değiştiyse yerel SDK izin gözlemcisi `permission` olayını gönderir.
-        HeroSignal.Notifications.onPermissionResult();
-        boolean granted = HeroSignal.Notifications.INSTANCE.getPermission();
+        Pushizo.Notifications.onPermissionResult();
+        boolean granted = Pushizo.Notifications.INSTANCE.getPermission();
         // Gerekçe gösterilemiyorsa izin kalıcı olarak reddedilmiştir (sistem iletişim kutusu artık açılmaz).
         if (!granted && fallback && activity != null
                 && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
             openNotificationSettings(activity);
         }
-        for (HeroSignalUnityPermissionCallback callback : callbacks) {
+        for (PushizoUnityPermissionCallback callback : callbacks) {
             try {
                 callback.onResult(granted);
             } catch (RuntimeException e) {
@@ -355,41 +355,41 @@ public final class HeroSignalUnityBridge {
         }
     }
 
-    /** Tepsideki HeroSignal bildirimlerini (ve grup özetlerini) kaldırır; uygulamanın diğer bildirimlerine dokunmaz. */
+    /** Tepsideki Pushizo bildirimlerini (ve grup özetlerini) kaldırır; uygulamanın diğer bildirimlerine dokunmaz. */
     public static void clearAllNotifications() {
-        HeroSignal.Notifications.clearAll();
+        Pushizo.Notifications.clearAll();
     }
 
-    /** Tek bir HeroSignal bildirimini tepsi kimliğiyle (androidNotificationId) kaldırır. */
+    /** Tek bir Pushizo bildirimini tepsi kimliğiyle (androidNotificationId) kaldırır. */
     public static void removeNotification(int androidNotificationId) {
-        HeroSignal.Notifications.removeNotification(androidNotificationId);
+        Pushizo.Notifications.removeNotification(androidNotificationId);
     }
 
     /** Aynı grup anahtarına (android_group) sahip bildirimleri ve grup özetini kaldırır. */
     public static void removeGroupedNotifications(String group) {
-        HeroSignal.Notifications.removeGroupedNotifications(group);
+        Pushizo.Notifications.removeGroupedNotifications(group);
     }
 
     // --- Konum (v2 Faz 17b; yalnızca ön plan) ---
 
     /** Konum paylaşımı açık mı (yerel SDK'nın kalıcı tercihi; izin durumundan bağımsız). */
-    public static boolean locationShared() { return HeroSignal.Location.isShared(); }
+    public static boolean locationShared() { return Pushizo.Location.isShared(); }
 
     /** Paylaşımı açar/kapatır; kapatınca yerel SDK sunucuya {@code location: null} gönderir. */
-    public static void setLocationShared(boolean shared) { HeroSignal.Location.setShared(shared); }
+    public static void setLocationShared(boolean shared) { Pushizo.Location.setShared(shared); }
 
     /**
      * Ön plan konum iznini ister. Yerel SDK'nın {@code Location.requestPermission} sonucu bildirmediği ve Unity etkinliği
      * {@code onRequestPermissionsResult}'ı iletmediği için akış köprüdedir: izin zaten varsa true; etkinlik yoksa veya
      * manifest'te ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION yoksa (uyarı loglanır) false; aksi halde SDK string
      * kaynaklarıyla açıklama diyaloğu (mesaj: rationale boş değilse o), "Şimdi değil"/iptal → false; "Devam" → sistem izni
-     * ({@code HeroSignal.Location.PERMISSION_REQUEST_CODE}). Sonuç izin penceresi kapanıp etkinlik ön plana döndüğünde
-     * (pencere açılmazsa — kalıcı ret — kısa süre sonra) {@code HeroSignal.Location.onPermissionResult()} çağrılarak
+     * ({@code Pushizo.Location.PERMISSION_REQUEST_CODE}). Sonuç izin penceresi kapanıp etkinlik ön plana döndüğünde
+     * (pencere açılmazsa — kalıcı ret — kısa süre sonra) {@code Pushizo.Location.onPermissionResult()} çağrılarak
      * güncel izin durumuyla bildirilir. Bekleyen istek varken gelen çağrılar aynı sonucu alır.
      */
-    public static void requestLocationPermission(Activity activity, String rationale, HeroSignalUnityPermissionCallback callback) {
-        if (HeroSignal.Location.getPermissionGranted()) {
-            HeroSignal.Location.onPermissionResult();
+    public static void requestLocationPermission(Activity activity, String rationale, PushizoUnityPermissionCallback callback) {
+        if (Pushizo.Location.getPermissionGranted()) {
+            Pushizo.Location.onPermissionResult();
             callback.onResult(true);
             return;
         }
@@ -420,10 +420,10 @@ public final class HeroSignalUnityBridge {
         }
         try {
             new AlertDialog.Builder(activity)
-                    .setTitle(com.herosignal.sdk.R.string.hs_location_rationale_title)
-                    .setMessage(rationale != null ? rationale : activity.getString(com.herosignal.sdk.R.string.hs_location_rationale_message))
-                    .setPositiveButton(com.herosignal.sdk.R.string.hs_location_rationale_continue, (dialog, which) -> askLocationSystem(activity, permissions))
-                    .setNegativeButton(com.herosignal.sdk.R.string.hs_location_rationale_not_now, (dialog, which) -> resolveLocationRequest())
+                    .setTitle(com.pushizo.sdk.R.string.hs_location_rationale_title)
+                    .setMessage(rationale != null ? rationale : activity.getString(com.pushizo.sdk.R.string.hs_location_rationale_message))
+                    .setPositiveButton(com.pushizo.sdk.R.string.hs_location_rationale_continue, (dialog, which) -> askLocationSystem(activity, permissions))
+                    .setNegativeButton(com.pushizo.sdk.R.string.hs_location_rationale_not_now, (dialog, which) -> resolveLocationRequest())
                     .setOnCancelListener(dialog -> resolveLocationRequest())
                     .show();
         } catch (RuntimeException e) {
@@ -439,7 +439,7 @@ public final class HeroSignalUnityBridge {
             locationPausedSinceRequest = false;
         }
         try {
-            ActivityCompat.requestPermissions(activity, permissions, HeroSignal.Location.PERMISSION_REQUEST_CODE);
+            ActivityCompat.requestPermissions(activity, permissions, Pushizo.Location.PERMISSION_REQUEST_CODE);
         } catch (RuntimeException e) {
             HsLog.INSTANCE.w("konum izni istenemedi", e);
             resolveLocationRequest();
@@ -455,7 +455,7 @@ public final class HeroSignalUnityBridge {
     }
 
     private static void resolveLocationRequest() {
-        List<HeroSignalUnityPermissionCallback> callbacks;
+        List<PushizoUnityPermissionCallback> callbacks;
         synchronized (LOCATION_LOCK) {
             if (locationPhase == LOCATION_IDLE) return;
             locationPhase = LOCATION_IDLE;
@@ -464,9 +464,9 @@ public final class HeroSignalUnityBridge {
             LOCATION_CALLBACKS.clear();
         }
         // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
-        HeroSignal.Location.onPermissionResult();
-        boolean granted = HeroSignal.Location.getPermissionGranted();
-        for (HeroSignalUnityPermissionCallback callback : callbacks) {
+        Pushizo.Location.onPermissionResult();
+        boolean granted = Pushizo.Location.getPermissionGranted();
+        for (PushizoUnityPermissionCallback callback : callbacks) {
             try {
                 callback.onResult(granted);
             } catch (RuntimeException e) {
@@ -522,70 +522,70 @@ public final class HeroSignalUnityBridge {
 
     // --- In-app ---
 
-    public static void addTriggers(String triggersJson) { HeroSignal.InAppMessages.addTriggers(stringMap(triggersJson)); }
+    public static void addTriggers(String triggersJson) { Pushizo.InAppMessages.addTriggers(stringMap(triggersJson)); }
 
-    public static void removeTriggers(String keysJson) { HeroSignal.InAppMessages.removeTriggers(stringList(keysJson)); }
+    public static void removeTriggers(String keysJson) { Pushizo.InAppMessages.removeTriggers(stringList(keysJson)); }
 
-    public static void clearTriggers() { HeroSignal.InAppMessages.clearTriggers(); }
+    public static void clearTriggers() { Pushizo.InAppMessages.clearTriggers(); }
 
-    public static String triggers() { return new JSONObject(HeroSignal.InAppMessages.getTriggers()).toString(); }
+    public static String triggers() { return new JSONObject(Pushizo.InAppMessages.getTriggers()).toString(); }
 
     /** Boş ad ekrandan çıkış demektir. */
-    public static void setScreen(String name) { HeroSignal.InAppMessages.setScreen(emptyToNull(name)); }
+    public static void setScreen(String name) { Pushizo.InAppMessages.setScreen(emptyToNull(name)); }
 
-    public static boolean inAppPaused() { return HeroSignal.InAppMessages.getPaused(); }
+    public static boolean inAppPaused() { return Pushizo.InAppMessages.getPaused(); }
 
-    public static void updateInAppPaused(boolean paused) { HeroSignal.InAppMessages.setPaused(paused); }
+    public static void updateInAppPaused(boolean paused) { Pushizo.InAppMessages.setPaused(paused); }
 
     // --- Bildirim kutusu (Kotlin suspend fonksiyonları Continuation ile) ---
 
-    public static void inboxList(int limit, String cursor, HeroSignalUnityCallback callback) {
+    public static void inboxList(int limit, String cursor, PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> pageJson((HsInboxPage) value).toString());
-        c.run(() -> HeroSignal.Inbox.INSTANCE.list(limit, emptyToNull(cursor), c));
+        c.run(() -> Pushizo.Inbox.INSTANCE.list(limit, emptyToNull(cursor), c));
     }
 
-    public static void inboxMarkRead(String id, HeroSignalUnityCallback callback) {
+    public static void inboxMarkRead(String id, PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> itemJson((HsInboxItem) value).toString());
-        c.run(() -> HeroSignal.Inbox.INSTANCE.markRead(id, c));
+        c.run(() -> Pushizo.Inbox.INSTANCE.markRead(id, c));
     }
 
-    public static void inboxMarkAllRead(HeroSignalUnityCallback callback) {
+    public static void inboxMarkAllRead(PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> object("unreadCount", value).toString());
-        c.run(() -> HeroSignal.Inbox.INSTANCE.markAllRead(c));
+        c.run(() -> Pushizo.Inbox.INSTANCE.markAllRead(c));
     }
 
-    public static void inboxArchive(String id, HeroSignalUnityCallback callback) {
+    public static void inboxArchive(String id, PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> null);
-        c.run(() -> HeroSignal.Inbox.INSTANCE.archive(id, c));
+        c.run(() -> Pushizo.Inbox.INSTANCE.archive(id, c));
     }
 
-    public static void inboxUnreadCount(HeroSignalUnityCallback callback) {
+    public static void inboxUnreadCount(PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> object("unreadCount", value).toString());
-        c.run(() -> HeroSignal.Inbox.INSTANCE.unreadCount(c));
+        c.run(() -> Pushizo.Inbox.INSTANCE.unreadCount(c));
     }
 
     // --- Tercihler (ADR-0019 §4; Kotlin suspend fonksiyonları Continuation ile) ---
 
     /** Başarı JSON'u: {"preferences":[…],"categories":[…]} (bkz. preferencesResultJson). */
-    public static void getPreferences(HeroSignalUnityCallback callback) {
+    public static void getPreferences(PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> preferencesResultJson((HsPreferencesResult) value).toString());
-        c.run(() -> HeroSignal.User.INSTANCE.getPreferences(c));
+        c.run(() -> Pushizo.User.INSTANCE.getPreferences(c));
     }
 
     /**
      * preferencesJson: [{"category","channel":null|"…","optedIn"}]; doğrulama yerel SDK'dadır (geçersizse
      * INVALID_ARGUMENT). Başarı JSON'u getPreferences ile aynıdır (güncel liste).
      */
-    public static void setPreferences(String preferencesJson, HeroSignalUnityCallback callback) {
+    public static void setPreferences(String preferencesJson, PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> preferencesResultJson((HsPreferencesResult) value).toString());
-        c.run(() -> HeroSignal.User.INSTANCE.setPreferences(preferenceInputs(preferencesJson), c));
+        c.run(() -> Pushizo.User.INSTANCE.setPreferences(preferenceInputs(preferencesJson), c));
     }
 
     // --- Oturum ---
 
     /** propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue false ise değer gönderilmez. */
     public static void sendEvent(String name, String propertiesJson, double value, boolean hasValue) {
-        HeroSignal.Session.sendEvent(name, toMap(parseObject(propertiesJson)), hasValue ? Double.valueOf(value) : null);
+        Pushizo.Session.sendEvent(name, toMap(parseObject(propertiesJson)), hasValue ? Double.valueOf(value) : null);
     }
 
     // --- Yardımcılar ---
@@ -598,13 +598,13 @@ public final class HeroSignalUnityBridge {
         String map(Object value) throws JSONException;
     }
 
-    /** Kotlin suspend çağrısının sonucunu HeroSignalUnityCallback'e çevirir (yalnızca bir kez). */
+    /** Kotlin suspend çağrısının sonucunu PushizoUnityCallback'e çevirir (yalnızca bir kez). */
     private static final class InboxContinuation implements Continuation<Object> {
-        private final HeroSignalUnityCallback callback;
+        private final PushizoUnityCallback callback;
         private final ValueMapper mapper;
         private boolean completed;
 
-        InboxContinuation(HeroSignalUnityCallback callback, ValueMapper mapper) {
+        InboxContinuation(PushizoUnityCallback callback, ValueMapper mapper) {
             this.callback = callback;
             this.mapper = mapper;
         }
@@ -662,7 +662,7 @@ public final class HeroSignalUnityBridge {
     }
 
     private static void emit(String type, JSONObject payload) {
-        HeroSignalUnityListener l = listener;
+        PushizoUnityListener l = listener;
         if (l == null) return;
         try {
             l.onEvent(type, payload.toString());

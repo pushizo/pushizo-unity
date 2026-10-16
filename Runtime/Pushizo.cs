@@ -1,23 +1,23 @@
 #nullable enable
 using System;
 using System.Threading.Tasks;
-using HeroSignalSdk.Internal;
+using PushizoSdk.Internal;
 
-namespace HeroSignalSdk
+namespace PushizoSdk
 {
     /// <summary>
-    /// HeroSignal Unity SDK (eski sağlayıcı v5 yüzeyiyle uyumlu). Android'de yerel <c>com.herosignal:herosignal-android</c>,
-    /// iOS'ta yerel <c>HeroSignal</c> Swift SDK'sı kullanılır; Editor'de çağrılar günlüğe yazılır. Tüm olaylar ve
+    /// Pushizo Unity SDK (eski sağlayıcı v5 yüzeyiyle uyumlu). Android'de yerel <c>com.pushizo:pushizo-android</c>,
+    /// iOS'ta yerel <c>Pushizo</c> Swift SDK'sı kullanılır; Editor'de çağrılar günlüğe yazılır. Tüm olaylar ve
     /// eşzamansız sonuçlar Unity ana iş parçacığında teslim edilir.
     /// <code>
-    /// HeroSignal.Initialize("app_…", new HeroSignalOptions { ApiUrl = "https://api.example.com" });
-    /// await HeroSignal.Notifications.RequestPermissionAsync();
-    /// HeroSignal.Login("user_42");
-    /// HeroSignal.User.AddTag("plan", "pro");
-    /// var page = await HeroSignal.Inbox.ListAsync(limit: 20);
+    /// Pushizo.Initialize("app_…", new PushizoOptions { ApiUrl = "https://api.example.com" });
+    /// await Pushizo.Notifications.RequestPermissionAsync();
+    /// Pushizo.Login("user_42");
+    /// Pushizo.User.AddTag("plan", "pro");
+    /// var page = await Pushizo.Inbox.ListAsync(limit: 20);
     /// </code>
     /// </summary>
-    public static class HeroSignal
+    public static class Pushizo
     {
         /// <summary>Bu C# katmanının sürümü.</summary>
         public const string SdkVersion = "0.1.0";
@@ -47,10 +47,10 @@ namespace HeroSignalSdk
         /// SDK'yı başlatır (uygulama açılışında bir kez, ana iş parçacığından; ör. ilk sahnedeki bir MonoBehaviour'un
         /// <c>Awake</c>/<c>Start</c>'ı). Aynı App ID ile tekrar çağrı etkisizdir; farklı App ID hata üretir.
         /// </summary>
-        public static void Initialize(string appId, HeroSignalOptions? options = null)
+        public static void Initialize(string appId, PushizoOptions? options = null)
         {
             if (string.IsNullOrWhiteSpace(appId)) throw new ArgumentException("appId gerekli.", nameof(appId));
-            var opts = (options ?? new HeroSignalOptions()).Clone();
+            var opts = (options ?? new PushizoOptions()).Clone();
             if (string.IsNullOrWhiteSpace(opts.ApiUrl) || !Uri.TryCreate(opts.ApiUrl, UriKind.Absolute, out var api) ||
                 (api.Scheme != Uri.UriSchemeHttps && api.Scheme != Uri.UriSchemeHttp))
                 throw new ArgumentException("ApiUrl http(s) ile başlayan mutlak bir adres olmalı.", nameof(options));
@@ -60,7 +60,7 @@ namespace HeroSignalSdk
                 if (s_initialized)
                 {
                     if (s_appId == appId) return;
-                    throw new InvalidOperationException("HeroSignal farklı bir App ID ile zaten başlatıldı; App ID uygulama ömrü boyunca değiştirilemez.");
+                    throw new InvalidOperationException("Pushizo farklı bir App ID ile zaten başlatıldı; App ID uygulama ömrü boyunca değiştirilemez.");
                 }
                 var bridge = s_bridge ??= PlatformFactory.Create();
                 var dispatcher = s_dispatcher ??= UnityMainThreadDispatcher.Create();
@@ -74,10 +74,10 @@ namespace HeroSignalSdk
                 Notifications.DispatchPermission(bridge.GetPermission());
             }
             if (!s_bridge!.IsNative)
-                SdkLog.Write(LogLevel.Warn, "bu platformda yerel HeroSignal SDK'sı yok (Editor/desteklenmeyen platform); çağrılar günlüğe yazılır, push çalışmaz");
+                SdkLog.Write(LogLevel.Warn, "bu platformda yerel Pushizo SDK'sı yok (Editor/desteklenmeyen platform); çağrılar günlüğe yazılır, push çalışmaz");
         }
 
-        /// <summary>KVKK/GDPR onayı (<see cref="HeroSignalOptions.RequiresPrivacyConsent"/>). false: kuyruk ve kimlik temizlenir.</summary>
+        /// <summary>KVKK/GDPR onayı (<see cref="PushizoOptions.RequiresPrivacyConsent"/>). false: kuyruk ve kimlik temizlenir.</summary>
         public static void SetConsentGiven(bool given) => Bridge().SetConsentGiven(given);
 
         /// <summary>
@@ -86,7 +86,7 @@ namespace HeroSignalSdk
         /// <c>aud</c> = appId) gerekir. JWT tüm SDK isteklerinde <c>Authorization: Bearer</c> başlığıyla gider; süresi
         /// dolunca <see cref="UpdateUserJwt"/> ile yenilenir.
         /// </summary>
-        /// <exception cref="HeroSignalException">Verilen kanıt app'in kimlik doğrulama kipine uymuyorsa (<c>NOT_READY</c>).</exception>
+        /// <exception cref="PushizoException">Verilen kanıt app'in kimlik doğrulama kipine uymuyorsa (<c>NOT_READY</c>).</exception>
         public static void Login(string externalId, string? identityHash = null, string? jwt = null)
         {
             if (string.IsNullOrWhiteSpace(externalId)) throw new ArgumentException("externalId gerekli.", nameof(externalId));
@@ -100,7 +100,7 @@ namespace HeroSignalSdk
         /// Süresi dolan veya yenilenen kimlik JWT'sini günceller; sonraki SDK istekleri yeni belirteci taşır, kuyrukta
         /// bekleyen işlemler yeniden denenir.
         /// </summary>
-        /// <exception cref="HeroSignalException">Giriş yapılmamışsa (<c>NOT_READY</c>).</exception>
+        /// <exception cref="PushizoException">Giriş yapılmamışsa (<c>NOT_READY</c>).</exception>
         public static void UpdateUserJwt(string jwt)
         {
             if (string.IsNullOrWhiteSpace(jwt)) throw new ArgumentException("jwt gerekli.", nameof(jwt));
@@ -110,7 +110,7 @@ namespace HeroSignalSdk
         /// <summary>Yerel köprünün döndürdüğü kimlik hatası (kanıt eksik, kullanıcı yok) <c>NOT_READY</c> olarak fırlatılır.</summary>
         private static void ThrowIfFailed(string? error)
         {
-            if (error != null) throw new HeroSignalException(HeroSignalException.NotReady, error);
+            if (error != null) throw new PushizoException(PushizoException.NotReady, error);
         }
 
         /// <summary>Cihazı kullanıcıdan ayırır (anonim kullanıcıya döner); kimlik JWT'si cihazdan silinir.</summary>
@@ -119,7 +119,7 @@ namespace HeroSignalSdk
         /// <summary>Başlatılmış köprü; <see cref="Initialize"/> çağrılmadıysa hata.</summary>
         internal static INativeBridge Bridge()
         {
-            if (!s_initialized) throw new InvalidOperationException("Önce HeroSignal.Initialize çağrılmalı.");
+            if (!s_initialized) throw new InvalidOperationException("Önce Pushizo.Initialize çağrılmalı.");
             return s_bridge!;
         }
 
@@ -137,7 +137,7 @@ namespace HeroSignalSdk
                 {
                     if (errorCode != null)
                     {
-                        tcs.TrySetException(new HeroSignalException(errorCode, errorMessage ?? errorCode));
+                        tcs.TrySetException(new PushizoException(errorCode, errorMessage ?? errorCode));
                         return;
                     }
                     try

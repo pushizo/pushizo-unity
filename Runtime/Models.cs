@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HeroSignalSdk
+namespace PushizoSdk
 {
     /// <summary>SDK günlük seviyesi (yerel SDK'lardaki <c>HsLog.Level</c> ile aynı sıra).</summary>
     public enum LogLevel
@@ -31,10 +31,10 @@ namespace HeroSignalSdk
         public string? Icon { get; }
     }
 
-    /// <summary>HeroSignal push bildirimi (tıklama ve ön plan olaylarında).</summary>
-    public sealed class HeroSignalNotification
+    /// <summary>Pushizo push bildirimi (tıklama ve ön plan olaylarında).</summary>
+    public sealed class PushizoNotification
     {
-        internal HeroSignalNotification(
+        internal PushizoNotification(
             string? title, string? body, string? imageUrl, string? url, string? deliveryId, string? messageId,
             IReadOnlyList<NotificationAction> actions, IReadOnlyDictionary<string, string> data, int? androidNotificationId = null)
         {
@@ -256,7 +256,7 @@ namespace HeroSignalSdk
     }
 
     /// <summary>SDK çağrısı hatası. <see cref="Code"/> sunucu hata kodu (ör. <c>NOT_FOUND</c>) veya SDK durum kodudur.</summary>
-    public sealed class HeroSignalException : Exception
+    public sealed class PushizoException : Exception
     {
         public const string NotReady = "NOT_READY";
         public const string PlatformNotSupported = "PLATFORM_NOT_SUPPORTED";
@@ -265,7 +265,7 @@ namespace HeroSignalSdk
         /// <summary>iOS Live Activity başlatılamadı (Live Activities kapalı, <c>NSSupportsLiveActivities</c> yok vb.).</summary>
         public const string LiveActivityFailed = "LIVE_ACTIVITY_FAILED";
 
-        public HeroSignalException(string code, string message, Exception? innerException = null)
+        public PushizoException(string code, string message, Exception? innerException = null)
             : base(message, innerException)
         {
             Code = code;
