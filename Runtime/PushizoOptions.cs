@@ -1,14 +1,14 @@
 #nullable enable
 
-namespace HeroSignalSdk
+namespace PushizoSdk
 {
-    /// <summary><see cref="HeroSignal.Initialize"/> yapılandırması.</summary>
-    public sealed class HeroSignalOptions
+    /// <summary><see cref="Pushizo.Initialize"/> yapılandırması.</summary>
+    public sealed class PushizoOptions
     {
-        /// <summary>HeroSignal API adresi (yerelde Android emülatöründen <c>http://10.0.2.2:4000</c>).</summary>
-        public string ApiUrl { get; set; } = "https://api.herosignal.dev";
+        /// <summary>Pushizo API adresi (yerelde Android emülatöründen <c>http://10.0.2.2:4000</c>).</summary>
+        public string ApiUrl { get; set; } = "https://api.pushizo.com";
 
-        /// <summary>KVKK/GDPR: <see cref="HeroSignal.SetConsentGiven"/> çağrılana kadar ağ çağrısı yapılmaz.</summary>
+        /// <summary>KVKK/GDPR: <see cref="Pushizo.SetConsentGiven"/> çağrılana kadar ağ çağrısı yapılmaz.</summary>
         public bool RequiresPrivacyConsent { get; set; }
 
         public LogLevel LogLevel { get; set; } = LogLevel.Warn;
@@ -17,7 +17,7 @@ namespace HeroSignalSdk
         public string AndroidDefaultChannelName { get; set; } = "Bildirimler";
 
         /// <summary>Android 8+ varsayılan bildirim kanalı kimliği.</summary>
-        public string AndroidDefaultChannelId { get; set; } = "herosignal_default";
+        public string AndroidDefaultChannelId { get; set; } = "pushizo_default";
 
         /// <summary>iOS: NSE ile rozet sayacı paylaşımı için App Group (ör. <c>group.com.example.app</c>).</summary>
         public string? IosAppGroup { get; set; }
@@ -28,6 +28,6 @@ namespace HeroSignalSdk
         /// <summary>iOS: provisional (sessiz) izinle başla.</summary>
         public bool IosProvisionalAuthorization { get; set; }
 
-        internal HeroSignalOptions Clone() => (HeroSignalOptions)MemberwiseClone();
+        internal PushizoOptions Clone() => (PushizoOptions)MemberwiseClone();
     }
 }

@@ -2,19 +2,19 @@
 using System;
 using System.Threading;
 
-namespace HeroSignalSdk
+namespace PushizoSdk
 {
     /// <summary>Bildirime (veya aksiyon düğmesine) tıklandı.</summary>
     public sealed class NotificationClickedEventArgs : EventArgs
     {
-        public NotificationClickedEventArgs(HeroSignalNotification notification, string? actionId, string? url)
+        public NotificationClickedEventArgs(PushizoNotification notification, string? actionId, string? url)
         {
             Notification = notification;
             ActionId = actionId;
             Url = url;
         }
 
-        public HeroSignalNotification Notification { get; }
+        public PushizoNotification Notification { get; }
         /// <summary>Tıklanan düğmenin kimliği; bildirim gövdesine tıklandıysa null.</summary>
         public string? ActionId { get; }
         /// <summary>Düğmenin URL'si, yoksa bildirimin URL'si.</summary>
@@ -31,13 +31,13 @@ namespace HeroSignalSdk
         private readonly Action _display;
         private int _displayed;
 
-        internal NotificationWillDisplayEventArgs(HeroSignalNotification notification, Action display)
+        internal NotificationWillDisplayEventArgs(PushizoNotification notification, Action display)
         {
             Notification = notification;
             _display = display;
         }
 
-        public HeroSignalNotification Notification { get; }
+        public PushizoNotification Notification { get; }
 
         /// <summary><see cref="PreventDefault"/> çağrıldı mı.</summary>
         public bool IsPrevented { get; private set; }

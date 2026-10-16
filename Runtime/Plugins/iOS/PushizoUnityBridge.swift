@@ -1,8 +1,8 @@
 import Foundation
-import HeroSignal
-// SPM: çekirdek tipler ayrı modülde; CocoaPods'ta (Unity + EDM4U) tek "HeroSignal" modülündedir.
-#if canImport(HeroSignalCore)
-import HeroSignalCore
+import Pushizo
+// SPM: çekirdek tipler ayrı modülde; CocoaPods'ta (Unity + EDM4U) tek "Pushizo" modülündedir.
+#if canImport(PushizoCore)
+import PushizoCore
 #endif
 import UIKit
 import UserNotifications
@@ -42,13 +42,13 @@ final class HSUnityBridgeState: NSObject {
     /// Unity token'ı `userInfo` alanında (sözlük değil, doğrudan NSData) gönderir; köprüleme yapmadan okunur.
     @objc private func didRegister(_ notification: NSNotification) {
         if let token = HSUnityBridgeState.payload(notification) as? Data {
-            HeroSignal.setDeviceToken(token)
+            Pushizo.setDeviceToken(token)
         }
     }
 
     @objc private func didFailToRegister(_ notification: NSNotification) {
         if let error = HSUnityBridgeState.payload(notification) as? NSError {
-            HeroSignal.setDeviceTokenError(error)
+            Pushizo.setDeviceTokenError(error)
         }
     }
 
@@ -236,7 +236,7 @@ private func hsuUpdateCache(_ s: HSPushSubscriptionState) -> Bool {
 /// İzin ve opt-in durumunu eşzamansız okur; değiştiyse `subscription` olayı üretir.
 func hsuRefreshState() {
     Task {
-        let s = await HeroSignal.User.pushSubscription.state()
+        let s = await Pushizo.User.pushSubscription.state()
         if hsuUpdateCache(s) {
             hsuEmit("subscription", hsuSubscriptionJson(id: s.id, token: s.token, optedIn: s.optedIn, permission: hsuIsGranted(s.permission)))
         }
@@ -273,7 +273,7 @@ private func hsuInbox(_ requestId: Int32, _ callback: HSUResultCallback?, _ body
             hsuReply(callback, requestId, nil, error.code, error.message)
         } catch let error as HSError {
             switch error {
-            case .notInitialized: hsuReply(callback, requestId, nil, "NOT_INITIALIZED", "HeroSignal başlatılmadı")
+            case .notInitialized: hsuReply(callback, requestId, nil, "NOT_INITIALIZED", "Pushizo başlatılmadı")
             case .noSubscription: hsuReply(callback, requestId, nil, "NOT_READY", "Abonelik henüz kaydedilmedi")
             case .noUser: hsuReply(callback, requestId, nil, "NOT_READY", "Kullanıcı henüz kaydedilmedi")
             case .invalidArgument(let message): hsuReply(callback, requestId, nil, "INVALID_ARGUMENT", message)
@@ -309,7 +309,7 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
         state.observeUnityAppController()
     }
 
-    HeroSignal.initialize(id) { options in
+    Pushizo.initialize(id) { options in
         if let apiUrl = o["apiUrl"] as? String, !apiUrl.isEmpty { options.apiUrl = apiUrl }
         options.requiresPrivacyConsent = o["requiresPrivacyConsent"] as? Bool ?? false
         options.logLevel = hsuLogLevel((o["logLevel"] as? NSNumber)?.intValue ?? HSLog.Level.warn.rawValue)
@@ -319,11 +319,11 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
     }
 
     if registerListeners {
-        HeroSignal.User.pushSubscription.addObserver { s in
+        Pushizo.User.pushSubscription.addObserver { s in
             hsuUpdateCache(s)
             hsuEmit("subscription", hsuSubscriptionJson(id: s.id, token: s.token, optedIn: s.optedIn, permission: hsuIsGranted(s.permission)))
         }
-        HeroSignal.Notifications.addForegroundLifecycleListener { event in
+        Pushizo.Notifications.addForegroundLifecycleListener { event in
             state.lock.lock()
             let enabled = state.foregroundHandlerEnabled
             state.lock.unlock()
@@ -338,18 +338,18 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
             }
             hsuEmit("foreground", ["eventId": eventId, "notification": hsuNotificationJson(event.notification)])
         }
-        HeroSignal.InAppMessages.addClickListener { event in
+        Pushizo.InAppMessages.addClickListener { event in
             hsuEmit("inAppClick", ["messageId": event.messageId, "actionId": event.actionId, "url": event.url ?? NSNull()])
         }
-        HeroSignal.InAppMessages.addLifecycleListener(state.lifecycleRelay)
+        Pushizo.InAppMessages.addLifecycleListener(state.lifecycleRelay)
         // Yerel SDK izin gözlemcisi → `permission` olayı (`{"permission":bool}`): requestPermission sonrası ve uygulama
         // yeniden etkinleştiğinde (izin Ayarlar'dan değişmiş olabilir) etkin izin değiştiyse çağrılır.
-        HeroSignal.Notifications.addPermissionObserver { granted in
+        Pushizo.Notifications.addPermissionObserver { granted in
             state.lock.lock(); state.cachedPermission = granted; state.lock.unlock()
             hsuEmit("permission", ["permission": granted])
         }
         // En son: uygulamayı açan (bekleyen) tıklama bu çağrıda iletilir.
-        HeroSignal.Notifications.addClickListener { event in
+        Pushizo.Notifications.addClickListener { event in
             hsuEmit("click", [
                 "notification": hsuNotificationJson(event.notification),
                 "actionId": event.actionId ?? NSNull(),
@@ -361,15 +361,15 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
 }
 
 @_cdecl("hs_set_consent_given")
-public func hs_set_consent_given(_ given: Int32) { HeroSignal.setConsentGiven(given != 0) }
+public func hs_set_consent_given(_ given: Int32) { Pushizo.setConsentGiven(given != 0) }
 
 /// Kanıt app'in kimlik doğrulama kipine uymuyorsa hata mesajı döner (giriş yapılmaz); başarıda nil. C# `hs_free` ile serbest bırakır.
 @_cdecl("hs_login")
 public func hs_login(_ externalId: UnsafePointer<CChar>?, _ identityHash: UnsafePointer<CChar>?, _ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
     guard let id = hsuNonEmpty(externalId) else { return hsuDup("externalId gerekli") }
     let hash = hsuNonEmpty(identityHash), token = hsuNonEmpty(jwt)
-    if let message = HeroSignal.loginProofError(identityHash: hash, jwt: token) { return hsuDup(message) }
-    HeroSignal.login(id, identityHash: hash, jwt: token)
+    if let message = Pushizo.loginProofError(identityHash: hash, jwt: token) { return hsuDup(message) }
+    Pushizo.login(id, identityHash: hash, jwt: token)
     return nil
 }
 
@@ -378,7 +378,7 @@ public func hs_login(_ externalId: UnsafePointer<CChar>?, _ identityHash: Unsafe
 public func hs_update_user_jwt(_ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
     guard let token = hsuNonEmpty(jwt) else { return hsuDup("jwt gerekli") }
     do {
-        try HeroSignal.updateUserJwt(token)
+        try Pushizo.updateUserJwt(token)
         return nil
     } catch {
         return hsuDup("Önce login ile kullanıcı kimliklendirilmeli")
@@ -386,58 +386,58 @@ public func hs_update_user_jwt(_ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePoi
 }
 
 @_cdecl("hs_logout")
-public func hs_logout() { HeroSignal.logout() }
+public func hs_logout() { Pushizo.logout() }
 
 @_cdecl("hs_set_log_level")
-public func hs_set_log_level(_ level: Int32) { HeroSignal.Debug.setLogLevel(hsuLogLevel(Int(level))) }
+public func hs_set_log_level(_ level: Int32) { Pushizo.Debug.setLogLevel(hsuLogLevel(Int(level))) }
 
 @_cdecl("hs_external_id")
-public func hs_external_id() -> UnsafeMutablePointer<CChar>? { hsuDup(HeroSignal.User.externalId) }
+public func hs_external_id() -> UnsafeMutablePointer<CChar>? { hsuDup(Pushizo.User.externalId) }
 
 @_cdecl("hs_user_id")
-public func hs_user_id() -> UnsafeMutablePointer<CChar>? { hsuDup(HeroSignal.User.id) }
+public func hs_user_id() -> UnsafeMutablePointer<CChar>? { hsuDup(Pushizo.User.id) }
 
 @_cdecl("hs_add_tags")
-public func hs_add_tags(_ json: UnsafePointer<CChar>?) { HeroSignal.User.addTags(hsuStringMap(json)) }
+public func hs_add_tags(_ json: UnsafePointer<CChar>?) { Pushizo.User.addTags(hsuStringMap(json)) }
 
 @_cdecl("hs_remove_tags")
-public func hs_remove_tags(_ json: UnsafePointer<CChar>?) { HeroSignal.User.removeTags(hsuStringList(json)) }
+public func hs_remove_tags(_ json: UnsafePointer<CChar>?) { Pushizo.User.removeTags(hsuStringList(json)) }
 
 @_cdecl("hs_tags")
-public func hs_tags() -> UnsafeMutablePointer<CChar>? { hsuDup(hsuJsonString(HeroSignal.User.getTags())) }
+public func hs_tags() -> UnsafeMutablePointer<CChar>? { hsuDup(hsuJsonString(Pushizo.User.getTags())) }
 
 @_cdecl("hs_add_aliases")
-public func hs_add_aliases(_ json: UnsafePointer<CChar>?) { HeroSignal.User.addAliases(hsuStringMap(json)) }
+public func hs_add_aliases(_ json: UnsafePointer<CChar>?) { Pushizo.User.addAliases(hsuStringMap(json)) }
 
 @_cdecl("hs_remove_alias")
 public func hs_remove_alias(_ label: UnsafePointer<CChar>?) {
     guard let label = hsuNonEmpty(label) else { return }
-    HeroSignal.User.removeAlias(label)
+    Pushizo.User.removeAlias(label)
 }
 
 @_cdecl("hs_set_language")
 public func hs_set_language(_ code: UnsafePointer<CChar>?) {
     guard let code = hsuNonEmpty(code) else { return }
-    HeroSignal.User.setLanguage(code)
+    Pushizo.User.setLanguage(code)
 }
 
 @_cdecl("hs_add_email")
-public func hs_add_email(_ email: UnsafePointer<CChar>?) { HeroSignal.User.addEmail(hsuString(email) ?? "") }
+public func hs_add_email(_ email: UnsafePointer<CChar>?) { Pushizo.User.addEmail(hsuString(email) ?? "") }
 
 @_cdecl("hs_remove_email")
-public func hs_remove_email(_ email: UnsafePointer<CChar>?) { HeroSignal.User.removeEmail(hsuString(email) ?? "") }
+public func hs_remove_email(_ email: UnsafePointer<CChar>?) { Pushizo.User.removeEmail(hsuString(email) ?? "") }
 
 @_cdecl("hs_add_sms")
-public func hs_add_sms(_ phone: UnsafePointer<CChar>?) { HeroSignal.User.addSms(hsuString(phone) ?? "") }
+public func hs_add_sms(_ phone: UnsafePointer<CChar>?) { Pushizo.User.addSms(hsuString(phone) ?? "") }
 
 @_cdecl("hs_remove_sms")
-public func hs_remove_sms(_ phone: UnsafePointer<CChar>?) { HeroSignal.User.removeSms(hsuString(phone) ?? "") }
+public func hs_remove_sms(_ phone: UnsafePointer<CChar>?) { Pushizo.User.removeSms(hsuString(phone) ?? "") }
 
 @_cdecl("hs_emails")
-public func hs_emails() -> UnsafeMutablePointer<CChar>? { hsuDup(hsuJsonString(HeroSignal.User.emails)) }
+public func hs_emails() -> UnsafeMutablePointer<CChar>? { hsuDup(hsuJsonString(Pushizo.User.emails)) }
 
 @_cdecl("hs_sms_numbers")
-public func hs_sms_numbers() -> UnsafeMutablePointer<CChar>? { hsuDup(hsuJsonString(HeroSignal.User.smsNumbers)) }
+public func hs_sms_numbers() -> UnsafeMutablePointer<CChar>? { hsuDup(hsuJsonString(Pushizo.User.smsNumbers)) }
 
 /// `{"id","token","optedIn","permission"}`; id/token canlı, optedIn/permission son yenilemeden.
 @_cdecl("hs_push_subscription")
@@ -447,14 +447,14 @@ public func hs_push_subscription() -> UnsafeMutablePointer<CChar>? {
     let optedIn = state.cachedOptedIn
     let permission = state.cachedPermission
     state.lock.unlock()
-    return hsuDup(hsuJsonString(hsuSubscriptionJson(id: HeroSignal.User.pushSubscription.id, token: HeroSignal.User.pushSubscription.token, optedIn: optedIn, permission: permission)))
+    return hsuDup(hsuJsonString(hsuSubscriptionJson(id: Pushizo.User.pushSubscription.id, token: Pushizo.User.pushSubscription.token, optedIn: optedIn, permission: permission)))
 }
 
 @_cdecl("hs_opt_in")
-public func hs_opt_in() { HeroSignal.User.pushSubscription.optIn() }
+public func hs_opt_in() { Pushizo.User.pushSubscription.optIn() }
 
 @_cdecl("hs_opt_out")
-public func hs_opt_out() { HeroSignal.User.pushSubscription.optOut() }
+public func hs_opt_out() { Pushizo.User.pushSubscription.optOut() }
 
 @_cdecl("hs_permission")
 public func hs_permission() -> Int32 {
@@ -467,14 +467,14 @@ public func hs_permission() -> Int32 {
 @_cdecl("hs_request_permission")
 public func hs_request_permission(_ fallbackToSettings: Int32, _ requestId: Int32, _ callback: HSUPermissionCallback?) {
     Task {
-        let status = await HeroSignal.Notifications.permission()
+        let status = await Pushizo.Notifications.permission()
         if status == .denied {
             if fallbackToSettings != 0 { await hsuOpenNotificationSettings() }
             hsuRefreshState()
             callback?(requestId, 0)
             return
         }
-        HeroSignal.Notifications.requestPermission { granted in
+        Pushizo.Notifications.requestPermission { granted in
             hsuRefreshState()
             callback?(requestId, granted ? 1 : 0)
         }
@@ -482,20 +482,20 @@ public func hs_request_permission(_ fallbackToSettings: Int32, _ requestId: Int3
 }
 
 @_cdecl("hs_clear_all_notifications")
-public func hs_clear_all_notifications() { HeroSignal.Notifications.clearAll() }
+public func hs_clear_all_notifications() { Pushizo.Notifications.clearAll() }
 
 /// Tek bildirimi istek kimliğiyle (`UNNotificationRequest.identifier`) bildirim merkezinden kaldırır.
 @_cdecl("hs_remove_notification")
 public func hs_remove_notification(_ identifier: UnsafePointer<CChar>?) {
     guard let id = hsuString(identifier), !id.isEmpty else { return }
-    HeroSignal.Notifications.removeNotification(identifier: id)
+    Pushizo.Notifications.removeNotification(identifier: id)
 }
 
 /// Aynı `thread-id`'ye sahip bildirimleri bildirim merkezinden kaldırır.
 @_cdecl("hs_remove_grouped_notifications")
 public func hs_remove_grouped_notifications(_ group: UnsafePointer<CChar>?) {
     guard let threadId = hsuString(group), !threadId.isEmpty else { return }
-    HeroSignal.Notifications.removeGroupedNotifications(threadId)
+    Pushizo.Notifications.removeGroupedNotifications(threadId)
 }
 
 @_cdecl("hs_set_foreground_handler_enabled")
@@ -515,44 +515,44 @@ public func hs_foreground_display(_ eventId: UnsafePointer<CChar>?) {
 @_cdecl("hs_add_triggers")
 public func hs_add_triggers(_ json: UnsafePointer<CChar>?) {
     let triggers = hsuStringMap(json)
-    hsuOnMain { HeroSignal.InAppMessages.addTriggers(triggers) }
+    hsuOnMain { Pushizo.InAppMessages.addTriggers(triggers) }
 }
 
 @_cdecl("hs_remove_triggers")
 public func hs_remove_triggers(_ json: UnsafePointer<CChar>?) {
     let keys = hsuStringList(json)
-    hsuOnMain { HeroSignal.InAppMessages.removeTriggers(keys) }
+    hsuOnMain { Pushizo.InAppMessages.removeTriggers(keys) }
 }
 
 @_cdecl("hs_clear_triggers")
-public func hs_clear_triggers() { hsuOnMain { HeroSignal.InAppMessages.clearTriggers() } }
+public func hs_clear_triggers() { hsuOnMain { Pushizo.InAppMessages.clearTriggers() } }
 
 @_cdecl("hs_triggers")
 public func hs_triggers() -> UnsafeMutablePointer<CChar>? {
-    hsuDup(hsuReadOnMain { hsuJsonString(HeroSignal.InAppMessages.getTriggers()) })
+    hsuDup(hsuReadOnMain { hsuJsonString(Pushizo.InAppMessages.getTriggers()) })
 }
 
 /// Boş ad ekrandan çıkış demektir.
 @_cdecl("hs_set_screen")
 public func hs_set_screen(_ name: UnsafePointer<CChar>?) {
     let screen = hsuNonEmpty(name)
-    hsuOnMain { HeroSignal.InAppMessages.setScreen(screen) }
+    hsuOnMain { Pushizo.InAppMessages.setScreen(screen) }
 }
 
 @_cdecl("hs_in_app_paused")
 public func hs_in_app_paused() -> Int32 {
-    let paused = hsuReadOnMain { HeroSignal.InAppMessages.paused }
+    let paused = hsuReadOnMain { Pushizo.InAppMessages.paused }
     return paused ? 1 : 0
 }
 
 @_cdecl("hs_set_in_app_paused")
-public func hs_set_in_app_paused(_ paused: Int32) { hsuOnMain { HeroSignal.InAppMessages.paused = paused != 0 } }
+public func hs_set_in_app_paused(_ paused: Int32) { hsuOnMain { Pushizo.InAppMessages.paused = paused != 0 } }
 
 @_cdecl("hs_inbox_list")
 public func hs_inbox_list(_ limit: Int32, _ cursor: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
     let c = hsuNonEmpty(cursor)
     hsuInbox(requestId, callback) {
-        let page = try await HeroSignal.Inbox.list(limit: Int(limit), cursor: c)
+        let page = try await Pushizo.Inbox.list(limit: Int(limit), cursor: c)
         return hsuJsonString(hsuPageJson(page))
     }
 }
@@ -561,7 +561,7 @@ public func hs_inbox_list(_ limit: Int32, _ cursor: UnsafePointer<CChar>?, _ req
 public func hs_inbox_mark_read(_ id: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
     let itemId = hsuString(id) ?? ""
     hsuInbox(requestId, callback) {
-        let item = try await HeroSignal.Inbox.markRead(itemId)
+        let item = try await Pushizo.Inbox.markRead(itemId)
         return hsuJsonString(hsuItemJson(item))
     }
 }
@@ -569,7 +569,7 @@ public func hs_inbox_mark_read(_ id: UnsafePointer<CChar>?, _ requestId: Int32, 
 @_cdecl("hs_inbox_mark_all_read")
 public func hs_inbox_mark_all_read(_ requestId: Int32, _ callback: HSUResultCallback?) {
     hsuInbox(requestId, callback) {
-        let unread = try await HeroSignal.Inbox.markAllRead()
+        let unread = try await Pushizo.Inbox.markAllRead()
         return hsuJsonString(["unreadCount": unread])
     }
 }
@@ -578,7 +578,7 @@ public func hs_inbox_mark_all_read(_ requestId: Int32, _ callback: HSUResultCall
 public func hs_inbox_archive(_ id: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
     let itemId = hsuString(id) ?? ""
     hsuInbox(requestId, callback) {
-        try await HeroSignal.Inbox.archive(itemId)
+        try await Pushizo.Inbox.archive(itemId)
         return nil
     }
 }
@@ -586,7 +586,7 @@ public func hs_inbox_archive(_ id: UnsafePointer<CChar>?, _ requestId: Int32, _ 
 @_cdecl("hs_inbox_unread_count")
 public func hs_inbox_unread_count(_ requestId: Int32, _ callback: HSUResultCallback?) {
     hsuInbox(requestId, callback) {
-        let unread = try await HeroSignal.Inbox.unreadCount()
+        let unread = try await Pushizo.Inbox.unreadCount()
         return hsuJsonString(["unreadCount": unread])
     }
 }
@@ -595,7 +595,7 @@ public func hs_inbox_unread_count(_ requestId: Int32, _ callback: HSUResultCallb
 @_cdecl("hs_get_preferences")
 public func hs_get_preferences(_ requestId: Int32, _ callback: HSUResultCallback?) {
     hsuInbox(requestId, callback) {
-        let result = try await HeroSignal.User.getPreferences()
+        let result = try await Pushizo.User.getPreferences()
         return hsuJsonString(hsuPreferencesResultJson(result))
     }
 }
@@ -605,7 +605,7 @@ public func hs_get_preferences(_ requestId: Int32, _ callback: HSUResultCallback
 public func hs_set_preferences(_ json: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
     let inputs = hsuPreferenceInputs(json)
     hsuInbox(requestId, callback) {
-        let result: HSPreferencesResult = try await HeroSignal.User.setPreferences(inputs)
+        let result: HSPreferencesResult = try await Pushizo.User.setPreferences(inputs)
         return hsuJsonString(hsuPreferencesResultJson(result))
     }
 }
@@ -615,7 +615,7 @@ public func hs_set_preferences(_ json: UnsafePointer<CChar>?, _ requestId: Int32
 public func hs_send_event(_ name: UnsafePointer<CChar>?, _ propertiesJson: UnsafePointer<CChar>?, _ value: Double, _ hasValue: Int32) {
     guard let eventName = hsuNonEmpty(name) else { return }
     let properties = (hsuJsonObject(propertiesJson) as? [String: Any]) ?? [:]
-    HeroSignal.Session.sendEvent(eventName, properties: properties, value: hasValue != 0 ? value : nil)
+    Pushizo.Session.sendEvent(eventName, properties: properties, value: hasValue != 0 ? value : nil)
 }
 
 // MARK: - Live Activities (ADR-0024)
@@ -635,10 +635,10 @@ private func hsuLiveActivity(_ requestId: Int32, _ callback: HSUResultCallback?,
     }
 }
 
-/// Genel `HeroSignalDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start iOS 17.2+, güncelleme belirteçleri).
+/// Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start iOS 17.2+, güncelleme belirteçleri).
 @_cdecl("hs_setup_default_live_activity")
 public func hs_setup_default_live_activity(_ requestId: Int32, _ callback: HSUResultCallback?) {
-    hsuLiveActivity(requestId, callback) { try HeroSignal.LiveActivities.setupDefaultLiveActivity() }
+    hsuLiveActivity(requestId, callback) { try Pushizo.LiveActivities.setupDefaultLiveActivity() }
 }
 
 /// Genel türle yerel etkinlik başlatır (iOS 16.1+). attributesJson/contentStateJson: düz JSON nesnesi (metin, sayı,
@@ -652,7 +652,7 @@ public func hs_start_default_live_activity(_ activityId: UnsafePointer<CChar>?, 
         return
     }
     hsuLiveActivity(requestId, callback) {
-        try HeroSignal.LiveActivities.startDefaultLiveActivity(activityId: id, attributes: attributes, contentState: contentState)
+        try Pushizo.LiveActivities.startDefaultLiveActivity(activityId: id, attributes: attributes, contentState: contentState)
     }
 }
 
@@ -660,11 +660,11 @@ public func hs_start_default_live_activity(_ activityId: UnsafePointer<CChar>?, 
 
 /// Paylaşım açık mı (yerel SDK'nın kalıcı tercihi; izin durumundan bağımsız).
 @_cdecl("hs_location_is_shared")
-public func hs_location_is_shared() -> Int32 { HeroSignal.Location.isShared ? 1 : 0 }
+public func hs_location_is_shared() -> Int32 { Pushizo.Location.isShared ? 1 : 0 }
 
 /// Paylaşımı açar/kapatır; kapatınca yerel SDK sunucuya `location: null` gönderir (konum ve rıza kaydı silinir).
 @_cdecl("hs_location_set_shared")
-public func hs_location_set_shared(_ shared: Int32) { HeroSignal.Location.setShared(shared != 0) }
+public func hs_location_set_shared(_ shared: Int32) { Pushizo.Location.setShared(shared != 0) }
 
 /// "Kullanırken" konum iznini ister: önce açıklama uyarısı (rationale boşsa SDK'nın varsayılan metni), sonra sistem
 /// istemi. Sonuç ana iş parçacığında: izin var/verildiyse 1; reddedilmiş/kısıtlı veya Info.plist'te
@@ -672,7 +672,7 @@ public func hs_location_set_shared(_ shared: Int32) { HeroSignal.Location.setSha
 @_cdecl("hs_location_request_permission")
 public func hs_location_request_permission(_ rationale: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUPermissionCallback?) {
     let text = hsuNonEmpty(rationale)
-    HeroSignal.Location.requestPermission(rationale: text) { granted in
+    Pushizo.Location.requestPermission(rationale: text) { granted in
         callback?(requestId, granted ? 1 : 0)
     }
 }

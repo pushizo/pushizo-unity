@@ -1,6 +1,6 @@
-package com.herosignal.unity;
+package com.pushizo.unity;
 
 /** Eşzamansız işlem sonucu: başarıda json, hatada errorCode + errorMessage (arka plan iş parçacığında). */
-public interface HeroSignalUnityCallback {
+public interface PushizoUnityCallback {
     void onResult(String json, String errorCode, String errorMessage);
 }

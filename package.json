@@ -1,12 +1,12 @@
 {
-  "name": "com.herosignal.unity",
+  "name": "com.pushizo.unity",
   "version": "0.1.0",
-  "displayName": "HeroSignal",
-  "description": "HeroSignal Unity SDK: push bildirimleri, in-app mesajlar, bildirim kutusu, kullanıcı/tag/alias, e-posta ve SMS abonelikleri. Yerel HeroSignal Android ve iOS SDK'larını sarar.",
+  "displayName": "Pushizo",
+  "description": "Pushizo Unity SDK: push bildirimleri, in-app mesajlar, bildirim kutusu, kullanıcı/tag/alias, e-posta ve SMS abonelikleri. Yerel Pushizo Android ve iOS SDK'larını sarar.",
   "unity": "2021.3",
   "license": "MIT",
   "keywords": [
-    "herosignal",
+    "pushizo",
     "push",
     "notifications",
     "in-app",
@@ -15,10 +15,10 @@
     "apns"
   ],
   "author": {
-    "name": "HeroSignal",
-    "url": "https://github.com/exec0de/herosignal"
+    "name": "Pushizo",
+    "url": "https://github.com/exec0de/pushizo"
   },
-  "documentationUrl": "https://github.com/exec0de/herosignal/tree/main/sdk/unity",
+  "documentationUrl": "https://github.com/exec0de/pushizo/tree/main/sdk/unity",
   "dependencies": {},
   "samples": [
     {
@@ -27,11 +27,11 @@
       "path": "Samples~/Demo"
     }
   ],
-  "changelogUrl": "https://github.com/exec0de/herosignal/blob/main/CHANGELOG.md",
-  "licensesUrl": "https://github.com/exec0de/herosignal/blob/main/LICENSE",
+  "changelogUrl": "https://github.com/exec0de/pushizo/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/exec0de/pushizo/blob/main/LICENSE",
   "repository": {
     "type": "git",
-    "url": "https://github.com/exec0de/herosignal.git",
+    "url": "https://github.com/exec0de/pushizo.git",
     "directory": "sdk/unity"
   }
 }

@@ -2,13 +2,13 @@
 using System;
 using System.Collections.Generic;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
     /// Unity Editor ve yerel SDK'sı olmayan platformlar (Standalone, WebGL…) için köprü: ağ çağrısı ve push yoktur.
     /// Çağrılar günlüğe yazılır (değerler değil, yalnızca işlem adı); tag, trigger, e-posta/SMS ve kimlik bellekte
     /// tutulur ki oyun kodu Editor'de akışı deneyebilsin; konum paylaşım tercihi de bellekte tutulur. Bildirim ve konum izni
-    /// istekleri false, bildirim kutusu, tercihler ve Live Activities <see cref="HeroSignalException.PlatformNotSupported"/> döndürür.
+    /// istekleri false, bildirim kutusu, tercihler ve Live Activities <see cref="PushizoException.PlatformNotSupported"/> döndürür.
     /// </summary>
     internal sealed class EditorNativeBridge : INativeBridge
     {
@@ -207,7 +207,7 @@ namespace HeroSignalSdk.Internal
         }
 
         private static void NotSupported(NativeResult result, string feature = "Bildirim kutusu") =>
-            result(null, HeroSignalException.PlatformNotSupported, $"{feature} yalnızca Android ve iOS cihazlarda kullanılabilir.");
+            result(null, PushizoException.PlatformNotSupported, $"{feature} yalnızca Android ve iOS cihazlarda kullanılabilir.");
 
         public void InboxList(int limit, string? cursor, NativeResult result) => NotSupported(result);
 
@@ -242,7 +242,7 @@ namespace HeroSignalSdk.Internal
             LiveActivitiesNotSupported(result);
 
         private static void LiveActivitiesNotSupported(NativeResult result) =>
-            result(null, HeroSignalException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
+            result(null, PushizoException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
 
         /// <summary>Konum tercihi yalnızca bellekte tutulur; konum okunmaz ve gönderilmez.</summary>
         public bool GetLocationShared()

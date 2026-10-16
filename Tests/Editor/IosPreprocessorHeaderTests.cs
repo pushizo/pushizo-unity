@@ -1,7 +1,7 @@
-using HeroSignalSdk.Editor;
+using PushizoSdk.Editor;
 using NUnit.Framework;
 
-namespace HeroSignalSdk.Tests
+namespace PushizoSdk.Tests
 {
     /// <summary>
     /// iOS derleme sonrası <c>Classes/Preprocessor.h</c> dönüşümü: UnityAppController'ın APNs token bildirimini
@@ -19,7 +19,7 @@ namespace HeroSignalSdk.Tests
         [Test]
         public void Sets_remote_notifications_define_to_one()
         {
-            var result = HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(UnityHeader);
+            var result = PushizoIosPreprocessorHeader.EnableRemoteNotifications(UnityHeader);
             StringAssert.Contains("#define UNITY_USES_REMOTE_NOTIFICATIONS 1\n", result);
             StringAssert.DoesNotContain("UNITY_USES_REMOTE_NOTIFICATIONS 0", result);
             // Diğer tanımlar korunur.
@@ -30,15 +30,15 @@ namespace HeroSignalSdk.Tests
         [Test]
         public void Is_idempotent()
         {
-            var once = HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(UnityHeader);
-            Assert.AreEqual(once, HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(once));
+            var once = PushizoIosPreprocessorHeader.EnableRemoteNotifications(UnityHeader);
+            Assert.AreEqual(once, PushizoIosPreprocessorHeader.EnableRemoteNotifications(once));
         }
 
         [Test]
         public void Preserves_indentation_and_trailing_comment_with_crlf()
         {
             const string header = "#pragma once\r\n  #define  UNITY_USES_REMOTE_NOTIFICATIONS\t0 // otomatik\r\n";
-            var result = HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(header);
+            var result = PushizoIosPreprocessorHeader.EnableRemoteNotifications(header);
             Assert.AreEqual("#pragma once\r\n  #define  UNITY_USES_REMOTE_NOTIFICATIONS\t1 // otomatik\r\n", result);
         }
 
@@ -47,17 +47,17 @@ namespace HeroSignalSdk.Tests
         {
             Assert.AreEqual(
                 "#pragma once\n#define UNITY_USES_REMOTE_NOTIFICATIONS 1\n",
-                HeroSignalIosPreprocessorHeader.EnableRemoteNotifications("#pragma once"));
+                PushizoIosPreprocessorHeader.EnableRemoteNotifications("#pragma once"));
             Assert.AreEqual(
                 "#pragma once\r\n#define UNITY_USES_REMOTE_NOTIFICATIONS 1\r\n",
-                HeroSignalIosPreprocessorHeader.EnableRemoteNotifications("#pragma once\r\n"));
+                PushizoIosPreprocessorHeader.EnableRemoteNotifications("#pragma once\r\n"));
         }
 
         [Test]
         public void Does_not_touch_similarly_named_defines()
         {
             const string header = "#define UNITY_USES_REMOTE_NOTIFICATIONS_EXTRA 0\n#define UNITY_USES_REMOTE_NOTIFICATIONS 0\n";
-            var result = HeroSignalIosPreprocessorHeader.EnableRemoteNotifications(header);
+            var result = PushizoIosPreprocessorHeader.EnableRemoteNotifications(header);
             Assert.AreEqual("#define UNITY_USES_REMOTE_NOTIFICATIONS_EXTRA 0\n#define UNITY_USES_REMOTE_NOTIFICATIONS 1\n", result);
         }
     }

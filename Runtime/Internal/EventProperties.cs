@@ -4,7 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
     /// <c>Session.SendEvent</c> özelliklerini JSON uyumlu kanonik ağaca çevirir: string, bool, long, double,

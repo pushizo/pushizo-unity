@@ -3,26 +3,26 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security;
 using System.Text;
-using HeroSignalSdk.Internal;
+using PushizoSdk.Internal;
 using UnityEditor;
 using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-namespace HeroSignalSdk.Editor
+namespace PushizoSdk.Editor
 {
     /// <summary>
     /// Android derleme öncesi/sonrası: minSdk denetimi ve <c>google-services.json</c> → Firebase kaynak değerleri.
     /// Firebase Unity SDK'sı veya google-services Gradle eklentisi olmadan FCM'nin başlaması için gereken
     /// <c>google_app_id</c>, <c>gcm_defaultSenderId</c>, <c>google_api_key</c>, <c>project_id</c> değerleri
     /// unityLibrary modülüne kaynak dosyası olarak yazılır (google-services eklentisinin ürettiğinin aynısı).
-    /// Yerel SDK bağımlılıkları EDM4U ile çözülür (Editor/HeroSignalDependencies.xml).
+    /// Yerel SDK bağımlılıkları EDM4U ile çözülür (Editor/PushizoDependencies.xml).
     /// </summary>
-    public sealed class HeroSignalAndroidPostProcessor : IPreprocessBuildWithReport, IPostGenerateGradleAndroidProject
+    public sealed class PushizoAndroidPostProcessor : IPreprocessBuildWithReport, IPostGenerateGradleAndroidProject
     {
         private const int MinSdk = 23;
-        private const string ValuesFileName = "herosignal_google_services.xml";
+        private const string ValuesFileName = "pushizo_google_services.xml";
 
         public int callbackOrder => 0;
 
@@ -30,26 +30,26 @@ namespace HeroSignalSdk.Editor
         {
             if (report.summary.platform != BuildTarget.Android) return;
             if ((int)PlayerSettings.Android.minSdkVersion < MinSdk)
-                Debug.LogWarning($"[HeroSignal] Android minimum API {MinSdk} gerekir (Player Settings → Minimum API Level).");
-            var settings = HeroSignalSettings.Load();
+                Debug.LogWarning($"[Pushizo] Android minimum API {MinSdk} gerekir (Player Settings → Minimum API Level).");
+            var settings = PushizoSettings.Load();
             if (!File.Exists(settings.androidGoogleServicesJson))
-                Debug.LogWarning($"[HeroSignal] {settings.androidGoogleServicesJson} bulunamadı; FCM token alınamaz. Firebase konsolundan indirip ekleyin (Project Settings → HeroSignal).");
+                Debug.LogWarning($"[Pushizo] {settings.androidGoogleServicesJson} bulunamadı; FCM token alınamaz. Firebase konsolundan indirip ekleyin (Project Settings → Pushizo).");
         }
 
         public void OnPostGenerateGradleAndroidProject(string unityLibraryPath)
         {
-            var settings = HeroSignalSettings.Load();
+            var settings = PushizoSettings.Load();
             var source = settings.androidGoogleServicesJson;
             if (!File.Exists(source)) return;
             var values = FirebaseValues(File.ReadAllText(source), PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android));
             if (values.Count == 0)
             {
-                Debug.LogWarning($"[HeroSignal] {source} içinde bu uygulama için Firebase istemcisi bulunamadı.");
+                Debug.LogWarning($"[Pushizo] {source} içinde bu uygulama için Firebase istemcisi bulunamadı.");
                 return;
             }
             var dir = Path.Combine(unityLibraryPath, "src", "main", "res", "values");
             Directory.CreateDirectory(dir);
-            var xml = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- HeroSignal: google-services.json'dan üretildi. -->\n<resources>\n");
+            var xml = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Pushizo: google-services.json'dan üretildi. -->\n<resources>\n");
             foreach (var pair in values)
                 xml.Append("  <string name=\"").Append(pair.Key).Append("\" translatable=\"false\">").Append(SecurityElement.Escape(pair.Value)).Append("</string>\n");
             xml.Append("</resources>\n");

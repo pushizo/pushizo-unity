@@ -7,10 +7,10 @@ using System.Text;
 using System.Threading;
 using AOT;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
-    /// <see cref="INativeBridge"/>'in iOS uygulaması: Runtime/Plugins/iOS/HeroSignalUnityBridge.swift içindeki
+    /// <see cref="INativeBridge"/>'in iOS uygulaması: Runtime/Plugins/iOS/PushizoUnityBridge.swift içindeki
     /// <c>hs_*</c> C fonksiyonlarını <c>[DllImport("__Internal")]</c> ile çağırır. Metinler UTF-8 (sonu NUL) bayt dizisi
     /// olarak gönderilir; dönen dizgeler kopyalanıp <c>hs_free</c> ile serbest bırakılır. Geri çağrılar statik
     /// (<see cref="MonoPInvokeCallbackAttribute"/>) olup istek kimliğiyle eşleştirilir.

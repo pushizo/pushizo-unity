@@ -12,12 +12,12 @@
       <repository>https://repo.maven.apache.org/maven2</repository>
       <repository>https://maven.google.com</repository>
     </repositories>
-    <androidPackage spec="com.herosignal:herosignal-android:0.1.0" />
+    <androidPackage spec="com.pushizo:pushizo-android:0.1.0" />
     <!-- Köprü (Java) Kotlin stdlib (Unit, Continuation) ve AndroidX Core (izin, bildirim tepsisi) tiplerini doğrudan kullanır. -->
     <androidPackage spec="org.jetbrains.kotlin:kotlin-stdlib:2.0.21" />
     <androidPackage spec="androidx.core:core:1.15.0" />
   </androidPackages>
   <iosPods>
-    <iosPod name="HeroSignal/App" version="~> 0.1.0" minTargetSdk="15.0" addToAllTargets="false" />
+    <iosPod name="Pushizo/App" version="~> 0.1.0" minTargetSdk="15.0" addToAllTargets="false" />
   </iosPods>
 </dependencies>

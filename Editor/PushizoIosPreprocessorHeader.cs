@@ -1,15 +1,15 @@
 using System.Text.RegularExpressions;
 
-namespace HeroSignalSdk.Editor
+namespace PushizoSdk.Editor
 {
     /// <summary>
     /// Unity'nin ürettiği Xcode projesindeki <c>Classes/Preprocessor.h</c> dönüşümü. Unity, projede uzak bildirim API'si
     /// kullanmadığını düşündüğünde <c>UNITY_USES_REMOTE_NOTIFICATIONS</c> değerini 0 yazar; bu durumda UnityAppController
     /// APNs token'ını almaz ve köprünün dinlediği <c>kUnityDidRegisterForRemoteNotificationsWithDeviceToken</c>
     /// bildirimini yayınlamaz. Dönüşüm saf metin işlemidir (platformdan bağımsız test edilebilir); iOS derleme sonrası
-    /// adımı (<c>HeroSignalIosPostProcessor</c>) dosyaya uygular.
+    /// adımı (<c>PushizoIosPostProcessor</c>) dosyaya uygular.
     /// </summary>
-    public static class HeroSignalIosPreprocessorHeader
+    public static class PushizoIosPreprocessorHeader
     {
         public const string RelativePath = "Classes/Preprocessor.h";
         public const string RemoteNotificationsDefine = "UNITY_USES_REMOTE_NOTIFICATIONS";

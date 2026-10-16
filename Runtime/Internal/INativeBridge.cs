@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
     /// Yerel köprü sonucu: başarıda <paramref name="json"/> (işleme göre null olabilir), hatada
@@ -10,7 +10,7 @@ namespace HeroSignalSdk.Internal
     internal delegate void NativeResult(string? json, string? errorCode, string? errorMessage);
 
     /// <summary>
-    /// Yerel köprü sözleşmesi: Android'de <c>com.herosignal.unity.HeroSignalUnityBridge</c> (Java,
+    /// Yerel köprü sözleşmesi: Android'de <c>com.pushizo.unity.PushizoUnityBridge</c> (Java,
     /// Runtime/Plugins/Android), iOS'ta <c>hs_*</c> C fonksiyonları (Swift, Runtime/Plugins/iOS), Editor'de
     /// <see cref="EditorNativeBridge"/>. Karmaşık değerler JSON metni olarak taşınır (biçimler <see cref="BridgeJson"/>).
     /// </summary>
@@ -94,7 +94,7 @@ namespace HeroSignalSdk.Internal
         bool SupportsLiveActivities { get; }
 
         /// <summary>
-        /// Genel <c>HeroSignalDefaultLiveActivityAttributes</c> türünü izlemeye alır. Başarı JSON'u: null; hata kodları
+        /// Genel <c>PushizoDefaultLiveActivityAttributes</c> türünü izlemeye alır. Başarı JSON'u: null; hata kodları
         /// <c>PLATFORM_NOT_SUPPORTED</c> | <c>NOT_READY</c> | <c>INVALID_ARGUMENT</c> | <c>LIVE_ACTIVITY_FAILED</c>.
         /// </summary>
         void SetupDefaultLiveActivity(NativeResult result);

@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>C# katmanının günlüğü (Unity konsolu); token/gizli değer yazılmaz.</summary>
     internal static class SdkLog
@@ -33,7 +33,7 @@ namespace HeroSignalSdk.Internal
 
         private static void DefaultWriter(LogLevel level, string message)
         {
-            var text = "[HeroSignal] " + message;
+            var text = "[Pushizo] " + message;
             switch (level)
             {
                 case LogLevel.Error: UnityEngine.Debug.LogError(text); break;

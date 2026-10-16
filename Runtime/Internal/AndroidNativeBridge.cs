@@ -3,15 +3,15 @@
 using System;
 using UnityEngine;
 
-namespace HeroSignalSdk.Internal
+namespace PushizoSdk.Internal
 {
     /// <summary>
-    /// <see cref="INativeBridge"/>'in Android uygulaması: <c>com.herosignal.unity.HeroSignalUnityBridge</c>
+    /// <see cref="INativeBridge"/>'in Android uygulaması: <c>com.pushizo.unity.PushizoUnityBridge</c>
     /// (Runtime/Plugins/Android) statik metotlarını AndroidJavaClass ile çağırır; geri çağrılar AndroidJavaProxy ile gelir.
     /// </summary>
     internal sealed class AndroidNativeBridge : INativeBridge
     {
-        private const string BridgeClass = "com.herosignal.unity.HeroSignalUnityBridge";
+        private const string BridgeClass = "com.pushizo.unity.PushizoUnityBridge";
 
         private AndroidJavaClass? _bridge;
 
@@ -99,7 +99,7 @@ namespace HeroSignalSdk.Internal
         {
             // Android tepsi kimliği tamsayıdır; iOS biçimindeki metin kimliğin burada karşılığı yoktur.
             if (!int.TryParse(id, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var androidNotificationId))
-                throw new ArgumentException("Android bildirim kimliği tamsayı olmalı (HeroSignalNotification.AndroidNotificationId).", nameof(id));
+                throw new ArgumentException("Android bildirim kimliği tamsayı olmalı (PushizoNotification.AndroidNotificationId).", nameof(id));
             Call("removeNotification", androidNotificationId);
         }
 
@@ -149,7 +149,7 @@ namespace HeroSignalSdk.Internal
             LiveActivitiesNotSupported(result);
 
         private static void LiveActivitiesNotSupported(NativeResult result) =>
-            result(null, HeroSignalException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
+            result(null, PushizoException.PlatformNotSupported, LiveActivitiesManager.UnsupportedMessage);
 
         public bool GetLocationShared() => Call<bool>("locationShared");
 
@@ -162,13 +162,13 @@ namespace HeroSignalSdk.Internal
             Call("requestLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
         }
 
-        /// <summary><c>HeroSignalUnityListener</c>; yerel iş parçacığından çağrılır (ana iş parçacığına HeroSignal taşır).</summary>
+        /// <summary><c>PushizoUnityListener</c>; yerel iş parçacığından çağrılır (ana iş parçacığına Pushizo taşır).</summary>
         private sealed class EventListener : AndroidJavaProxy
         {
             private readonly Action<string, string> _onEvent;
 
             public EventListener(Action<string, string> onEvent)
-                : base("com.herosignal.unity.HeroSignalUnityListener") => _onEvent = onEvent;
+                : base("com.pushizo.unity.PushizoUnityListener") => _onEvent = onEvent;
 
             // AndroidJavaProxy metot adıyla eşleştirir (Java arayüzündeki ad).
             public void onEvent(string type, string json) => _onEvent(type, json);
@@ -179,7 +179,7 @@ namespace HeroSignalSdk.Internal
             private readonly NativeResult _result;
 
             public ResultCallback(NativeResult result)
-                : base("com.herosignal.unity.HeroSignalUnityCallback") => _result = result;
+                : base("com.pushizo.unity.PushizoUnityCallback") => _result = result;
 
             public void onResult(string? json, string? errorCode, string? errorMessage) => _result(json, errorCode, errorMessage);
         }
@@ -189,7 +189,7 @@ namespace HeroSignalSdk.Internal
             private readonly Action<bool> _completion;
 
             public PermissionCallback(Action<bool> completion)
-                : base("com.herosignal.unity.HeroSignalUnityPermissionCallback") => _completion = completion;
+                : base("com.pushizo.unity.PushizoUnityPermissionCallback") => _completion = completion;
 
             public void onResult(bool granted) => _completion(granted);
         }
