@@ -21,7 +21,7 @@ Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](ht
 ```json
 {
   "dependencies": {
-    "com.pushizo.unity": "https://github.com/exec0de/pushizo.git?path=sdk/unity#v0.1.0"
+    "com.pushizo.unity": "https://github.com/exec0de/pushizo.git?path=sdk/unity#sdk-v0.1.0"
   }
 }
 ```
