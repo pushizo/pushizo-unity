@@ -16,9 +16,9 @@
   ],
   "author": {
     "name": "Pushizo",
-    "url": "https://github.com/exec0de/pushizo"
+    "url": "https://pushizo.com"
   },
-  "documentationUrl": "https://github.com/exec0de/pushizo/tree/main/sdk/unity",
+  "documentationUrl": "https://docs.pushizo.com/docs/sdk/unity",
   "dependencies": {},
   "samples": [
     {
@@ -27,11 +27,10 @@
       "path": "Samples~/Demo"
     }
   ],
-  "changelogUrl": "https://github.com/exec0de/pushizo/blob/main/CHANGELOG.md",
-  "licensesUrl": "https://github.com/exec0de/pushizo/blob/main/LICENSE",
+  "changelogUrl": "https://docs.pushizo.com/docs/changelog",
+  "licensesUrl": "https://github.com/exec0de/pushizo-unity/blob/main/LICENSE.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/exec0de/pushizo.git",
-    "directory": "sdk/unity"
+    "url": "https://github.com/exec0de/pushizo-unity.git"
   }
 }
