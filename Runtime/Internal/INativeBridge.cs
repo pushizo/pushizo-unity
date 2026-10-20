@@ -75,6 +75,14 @@ namespace PushizoSdk.Internal
         void InboxUnreadCount(NativeResult result);
 
         /// <summary>
+        /// Canlı sohbet çağrısı (ADR-0040). <paramref name="method"/>: start, getConfig, getConversation, getMessages,
+        /// sendMessage, sendAttachment (base64), markRead, refreshUnreadCount, getUnreadCount, leaveOfflineMessage, setTyping,
+        /// startListening, stopListening, attachmentUrl, getVisitorId. Başarı JSON'u yerel modelin camelCase sözlüğü
+        /// (sayaçlar <c>{"unreadCount"}</c>, adres <c>{"url"}</c>, kimlik <c>{"visitorId"}</c>; dönüşsüz işlemlerde null).
+        /// </summary>
+        void ChatCall(string method, string argsJson, NativeResult result);
+
+        /// <summary>
         /// Başarı JSON'u: <c>{"preferences":[{"category","channel","optedIn","explicit","source","updatedAt"}],
         /// "categories":[{"key","name":{},"description":{},"channels":[…]|null,"defaultOptedIn"}]}</c>.
         /// </summary>

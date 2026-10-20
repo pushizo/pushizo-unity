@@ -271,6 +271,8 @@ private func hsuInbox(_ requestId: Int32, _ callback: HSUResultCallback?, _ body
             hsuReply(callback, requestId, json, nil, nil)
         } catch let error as HSApiError {
             hsuReply(callback, requestId, nil, error.code, error.message)
+        } catch HSChatError.invalidArgument(let message) {
+            hsuReply(callback, requestId, nil, "INVALID_ARGUMENT", message)
         } catch let error as HSError {
             switch error {
             case .notInitialized: hsuReply(callback, requestId, nil, "NOT_INITIALIZED", "Pushizo başlatılmadı")
@@ -342,6 +344,13 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
             hsuEmit("inAppClick", ["messageId": event.messageId, "actionId": event.actionId, "url": event.url ?? NSNull()])
         }
         Pushizo.InAppMessages.addLifecycleListener(state.lifecycleRelay)
+        // Canlı sohbet olayları → "chat"; sohbet bildirimi tıklaması → "chatOpen" (C# katmanı bekletir).
+        Pushizo.Chat.addListener { event in
+            var payload = event.payload
+            payload["type"] = event.type
+            hsuEmit("chat", payload)
+        }
+        Pushizo.Chat.addOpenListener { info in hsuEmit("chatOpen", info.dictionary) }
         // Yerel SDK izin gözlemcisi → `permission` olayı (`{"permission":bool}`): requestPermission sonrası ve uygulama
         // yeniden etkinleştiğinde (izin Ayarlar'dan değişmiş olabilir) etkin izin değiştiyse çağrılır.
         Pushizo.Notifications.addPermissionObserver { granted in
@@ -547,6 +556,77 @@ public func hs_in_app_paused() -> Int32 {
 
 @_cdecl("hs_set_in_app_paused")
 public func hs_set_in_app_paused(_ paused: Int32) { hsuOnMain { Pushizo.InAppMessages.paused = paused != 0 } }
+
+// MARK: - Canlı sohbet (ADR-0040)
+
+/// Sohbet çağrıları tek giriş noktasından (Android `chatCall` ve .NET MAUI köprüsüyle aynı yöntem adları ve JSON biçimleri).
+@_cdecl("hs_chat_call")
+public func hs_chat_call(_ method: UnsafePointer<CChar>?, _ argsJson: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let name = method.map { String(cString: $0) } ?? ""
+    let raw = argsJson.map { String(cString: $0) } ?? "{}"
+    let a = ((try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]) ?? [:]
+    func str(_ key: String) -> String? {
+        guard let v = a[key] as? String, !v.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return v
+    }
+    func int(_ key: String) -> Int? { (a[key] as? NSNumber)?.intValue }
+    func json(_ dict: [String: Any]) -> String? {
+        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+    switch name {
+    case "start":
+        hsuInbox(requestId, callback) { json(try await Pushizo.Chat.start(name: str("name"), email: str("email"), language: str("language")).dictionary) }
+    case "getConfig":
+        hsuInbox(requestId, callback) { json(try await Pushizo.Chat.getConfig(language: str("language")).dictionary) }
+    case "getConversation":
+        hsuInbox(requestId, callback) { json(try await Pushizo.Chat.getConversation().dictionary) }
+    case "getMessages":
+        hsuInbox(requestId, callback) { json(try await Pushizo.Chat.getMessages(afterSeq: int("afterSeq"), beforeSeq: int("beforeSeq"), limit: int("limit") ?? 50).dictionary) }
+    case "sendMessage":
+        hsuInbox(requestId, callback) {
+            guard let text = str("text") else { throw HSChatError.invalidArgument("text gerekli") }
+            return json(try await Pushizo.Chat.sendMessage(text, optionId: str("optionId")).dictionary)
+        }
+    case "sendAttachment":
+        hsuInbox(requestId, callback) {
+            guard let base64 = str("base64"), let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
+                  let fileName = str("fileName"), let mimeType = str("mimeType") else {
+                throw HSChatError.invalidArgument("base64, fileName ve mimeType gerekli")
+            }
+            return json(try await Pushizo.Chat.sendAttachment(data, fileName: fileName, mimeType: mimeType, text: str("text")).dictionary)
+        }
+    case "markRead":
+        hsuInbox(requestId, callback) { json(["unreadCount": try await Pushizo.Chat.markRead(int("seq") ?? 0)]) }
+    case "refreshUnreadCount":
+        hsuInbox(requestId, callback) { json(["unreadCount": try await Pushizo.Chat.refreshUnreadCount()]) }
+    case "getUnreadCount":
+        hsuInbox(requestId, callback) { json(["unreadCount": Pushizo.Chat.unreadCount]) }
+    case "leaveOfflineMessage":
+        hsuInbox(requestId, callback) {
+            guard let email = str("email"), let text = str("text") else { throw HSChatError.invalidArgument("email ve text gerekli") }
+            return json(try await Pushizo.Chat.leaveOfflineMessage(email: email, text: text, name: str("name")).dictionary)
+        }
+    case "setTyping":
+        Pushizo.Chat.setTyping(a["typing"] as? Bool ?? false)
+        hsuInbox(requestId, callback) { nil }
+    case "startListening":
+        Pushizo.Chat.startListening()
+        hsuInbox(requestId, callback) { nil }
+    case "stopListening":
+        Pushizo.Chat.stopListening()
+        hsuInbox(requestId, callback) { nil }
+    case "attachmentUrl":
+        hsuInbox(requestId, callback) {
+            guard let attachmentId = str("attachmentId") else { throw HSChatError.invalidArgument("attachmentId gerekli") }
+            return json(["url": try Pushizo.Chat.attachmentUrl(attachmentId, download: a["download"] as? Bool ?? false).absoluteString])
+        }
+    case "getVisitorId":
+        hsuInbox(requestId, callback) { json(["visitorId": Pushizo.Chat.visitorId ?? NSNull()]) }
+    default:
+        hsuInbox(requestId, callback) { throw HSChatError.invalidArgument("bilinmeyen sohbet yöntemi: \(name)") }
+    }
+}
 
 @_cdecl("hs_inbox_list")
 public func hs_inbox_list(_ limit: Int32, _ cursor: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {

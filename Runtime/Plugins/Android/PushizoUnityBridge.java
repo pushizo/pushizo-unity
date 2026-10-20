@@ -20,6 +20,13 @@ import androidx.core.app.ActivityCompat;
 import com.pushizo.sdk.Pushizo;
 import com.pushizo.sdk.HsAction;
 import com.pushizo.sdk.HsApiException;
+import com.pushizo.sdk.HsChatConfig;
+import com.pushizo.sdk.HsChatConversationState;
+import com.pushizo.sdk.HsChatEventAdapter;
+import com.pushizo.sdk.HsChatIdentifyResult;
+import com.pushizo.sdk.HsChatMessage;
+import com.pushizo.sdk.HsChatMessagePage;
+import com.pushizo.sdk.PushizoChat;
 import com.pushizo.sdk.HsForegroundEvent;
 import com.pushizo.sdk.HsInAppLifecycleEvent;
 import com.pushizo.sdk.HsInAppLifecycleListener;
@@ -192,6 +199,14 @@ public final class PushizoUnityBridge {
                 return Unit.INSTANCE;
             });
             Pushizo.InAppMessages.addLifecycleListener(IN_APP_LIFECYCLE);
+            // Canlı sohbet olayları → "chat"; sohbet bildirimi tıklaması → "chatOpen" (C# katmanı bekletir).
+            Pushizo.Chat.addListener(new HsChatEventAdapter((type, payload) -> {
+                JSONObject body = new JSONObject(payload);
+                put(body, "type", type);
+                emit("chat", body);
+                return Unit.INSTANCE;
+            }));
+            Pushizo.Chat.addOpenListener(info -> emit("chatOpen", new JSONObject(info.toMap())));
             // En son: uygulamayı açan (bekleyen) tıklama bu çağrıda iletilir.
             Pushizo.Notifications.addClickListener(event -> {
                 JSONObject payload = object("actionId", event.getActionId(), "url", event.getUrl());
@@ -579,6 +594,128 @@ public final class PushizoUnityBridge {
     public static void setPreferences(String preferencesJson, PushizoUnityCallback callback) {
         InboxContinuation c = new InboxContinuation(callback, value -> preferencesResultJson((HsPreferencesResult) value).toString());
         c.run(() -> Pushizo.User.INSTANCE.setPreferences(preferenceInputs(preferencesJson), c));
+    }
+
+    // --- Canlı sohbet (ADR-0040; Kotlin suspend fonksiyonları Continuation ile) ---
+
+    /**
+     * Sohbet çağrıları tek giriş noktasından (.NET MAUI köprüsüyle aynı yöntem adları ve JSON biçimleri). method: start,
+     * getConfig, getConversation, getMessages, sendMessage, sendAttachment (base64), markRead, refreshUnreadCount,
+     * getUnreadCount, leaveOfflineMessage, setTyping, startListening, stopListening, attachmentUrl, getVisitorId.
+     */
+    public static void chatCall(String method, String argsJson, PushizoUnityCallback callback) {
+        final JSONObject a;
+        try {
+            a = argsJson == null || argsJson.trim().isEmpty() ? new JSONObject() : new JSONObject(argsJson);
+        } catch (JSONException e) {
+            callback.onResult(null, "INVALID_ARGUMENT", "argsJson geçersiz JSON");
+            return;
+        }
+        final PushizoChat chat = Pushizo.Chat;
+        final ValueMapper modelJson = value -> new JSONObject(chatMap(value)).toString();
+        final ValueMapper unreadJson = value -> object("unreadCount", value).toString();
+        try {
+            switch (method) {
+                case "start": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    c.run(() -> chat.start(chatStr(a, "name"), chatStr(a, "email"), chatStr(a, "language"), c));
+                    break;
+                }
+                case "getConfig": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    c.run(() -> chat.getConfig(chatStr(a, "language"), c));
+                    break;
+                }
+                case "getConversation": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    c.run(() -> chat.getConversation(c));
+                    break;
+                }
+                case "getMessages": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    Long after = a.has("afterSeq") && !a.isNull("afterSeq") ? Long.valueOf(a.optLong("afterSeq")) : null;
+                    Long before = a.has("beforeSeq") && !a.isNull("beforeSeq") ? Long.valueOf(a.optLong("beforeSeq")) : null;
+                    c.run(() -> chat.getMessages(after, before, a.optInt("limit", 50), c));
+                    break;
+                }
+                case "sendMessage": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    c.run(() -> chat.sendMessage(chatRequired(a, "text"), chatStr(a, "optionId"), c));
+                    break;
+                }
+                case "sendAttachment": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    byte[] bytes = android.util.Base64.decode(chatRequired(a, "base64"), android.util.Base64.DEFAULT);
+                    c.run(() -> chat.sendAttachment(bytes, chatRequired(a, "fileName"), chatRequired(a, "mimeType"), chatStr(a, "text"), c));
+                    break;
+                }
+                case "markRead": {
+                    InboxContinuation c = new InboxContinuation(callback, unreadJson);
+                    c.run(() -> chat.markRead(a.optLong("seq", 0L), c));
+                    break;
+                }
+                case "refreshUnreadCount": {
+                    InboxContinuation c = new InboxContinuation(callback, unreadJson);
+                    c.run(() -> chat.refreshUnreadCount(c));
+                    break;
+                }
+                case "getUnreadCount":
+                    callback.onResult(object("unreadCount", chat.getUnreadCount()).toString(), null, null);
+                    break;
+                case "leaveOfflineMessage": {
+                    InboxContinuation c = new InboxContinuation(callback, modelJson);
+                    c.run(() -> chat.leaveOfflineMessage(chatRequired(a, "email"), chatRequired(a, "text"), chatStr(a, "name"), c));
+                    break;
+                }
+                case "setTyping":
+                    chat.setTyping(a.optBoolean("typing", false));
+                    callback.onResult(null, null, null);
+                    break;
+                case "startListening":
+                    chat.startListening();
+                    callback.onResult(null, null, null);
+                    break;
+                case "stopListening":
+                    chat.stopListening();
+                    callback.onResult(null, null, null);
+                    break;
+                case "attachmentUrl":
+                    callback.onResult(object("url", chat.attachmentUrl(chatRequired(a, "attachmentId"), a.optBoolean("download", false))).toString(), null, null);
+                    break;
+                case "getVisitorId":
+                    callback.onResult(object("visitorId", chat.getVisitorId()).toString(), null, null);
+                    break;
+                default:
+                    callback.onResult(null, "INVALID_ARGUMENT", "bilinmeyen sohbet yöntemi: " + method);
+            }
+        } catch (IllegalArgumentException e) {
+            callback.onResult(null, "INVALID_ARGUMENT", e.getMessage());
+        } catch (IllegalStateException e) {
+            callback.onResult(null, "NOT_READY", e.getMessage());
+        } catch (RuntimeException e) {
+            callback.onResult(null, "HS_ERROR", e.getMessage());
+        }
+    }
+
+    /** Sohbet modelinin camelCase sözlüğü (Kotlin `toMap()`). */
+    private static Map<String, Object> chatMap(Object value) {
+        if (value instanceof HsChatMessage) return ((HsChatMessage) value).toMap();
+        if (value instanceof HsChatConfig) return ((HsChatConfig) value).toMap();
+        if (value instanceof HsChatConversationState) return ((HsChatConversationState) value).toMap();
+        if (value instanceof HsChatMessagePage) return ((HsChatMessagePage) value).toMap();
+        if (value instanceof HsChatIdentifyResult) return ((HsChatIdentifyResult) value).toMap();
+        throw new IllegalArgumentException("beklenmeyen sohbet sonucu");
+    }
+
+    private static String chatStr(JSONObject a, String key) {
+        if (!a.has(key) || a.isNull(key)) return null;
+        return emptyToNull(a.optString(key).trim());
+    }
+
+    private static String chatRequired(JSONObject a, String key) {
+        String value = chatStr(a, key);
+        if (value == null) throw new IllegalArgumentException(key + " gerekli");
+        return value;
     }
 
     // --- Oturum ---

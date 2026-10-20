@@ -202,6 +202,26 @@ yapılandırma gerekmez, tıklama ve yaşam döngüsü olayları mevcut in-app d
 (`supports=html,carousel`) yerel SDK tarafından yapılır; desteklemeyen eski yerel sürümlere sunucu HTML mesaj göndermez
 ve carousel bloklarını çıkarır (ADR-0027 §6–7).
 
+### Canlı sohbet
+
+```csharp
+await Pushizo.Chat.StartAsync(name: "Ali");
+var config = await Pushizo.Chat.GetConfigAsync();          // Online, OfflineMessage, ek sınırları
+var page = await Pushizo.Chat.GetMessagesAsync();
+Pushizo.Chat.EventReceived += e => { if (e.Type == ChatEventType.Message) Render(e.Message!); }; // ana iş parçacığında
+Pushizo.Chat.Opened += e => OpenChat(e.ConversationId);   // sohbet bildirimine tıklama
+await Pushizo.Chat.StartListeningAsync();                  // sahne açıkken; ayrılınca StopListeningAsync()
+await Pushizo.Chat.SendMessageAsync("Merhaba");            // bot hızlı yanıtı: SendMessageAsync(label, optionId)
+await Pushizo.Chat.MarkReadAsync(page.Messages[page.Messages.Count - 1].Seq);
+```
+
+Ziyaretçi kimliği, çevrimdışı kuyruk (aynı `client_message_id` ile yeniden deneme), canlı akış (SSE; koparsa üstel
+geri çekilme + `after_seq` yoklaması) ve push ile gelen temsilci mesajları (`pushizo_chat`) yerel Android/iOS SDK'sındadır;
+`start` sonrası login/logout ve push aboneliği değişince bağlama yerel SDK'da yenilenir, logout ziyaretçiyi sıfırlar.
+Mesajlar `seq` ile sıralanır; ağ yokken gönderilen mesaj `pending` döner ve gönderilince olayla sunucu kopyası gelir.
+Ayrıntı: `docs/sdk/android.md` / `docs/sdk/ios.md` → "Canlı sohbet" (ADR-0040).
+Editor'de çağrılar `PushizoException` (`PLATFORM_NOT_SUPPORTED`) ile sonuçlanır.
+
 ### Konum
 
 Kullanıcı izin verip paylaşımı açtığında yerel SDK yaklaşık konumu push aboneliğine yazar (konum hedefleme). Yalnızca ön

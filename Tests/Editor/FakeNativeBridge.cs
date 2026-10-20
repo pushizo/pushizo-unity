@@ -28,6 +28,19 @@ namespace PushizoSdk.Tests
 
         public bool IsNative => true;
 
+        /// <summary>Sohbet yanıtları (yöntem → json, hata kodu); tanımsız yöntem null JSON döner.</summary>
+        public Dictionary<string, KeyValuePair<string?, string?>> ChatResponses { get; } = new Dictionary<string, KeyValuePair<string?, string?>>();
+
+        /// <summary>Sohbet çağrıları: (yöntem, argüman JSON'u).</summary>
+        public List<KeyValuePair<string, string>> ChatCalls { get; } = new List<KeyValuePair<string, string>>();
+
+        public void ChatCall(string method, string argsJson, NativeResult result)
+        {
+            ChatCalls.Add(new KeyValuePair<string, string>(method, argsJson));
+            if (ChatResponses.TryGetValue(method, out var r)) result(r.Key, r.Value, r.Value);
+            else result(null, null, null);
+        }
+
         public void Emit(string type, string json) => (_onEvent ?? throw new InvalidOperationException("başlatılmadı"))(type, json);
 
         private void Record(string call) => Calls.Add(call);

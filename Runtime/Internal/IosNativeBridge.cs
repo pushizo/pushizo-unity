@@ -76,6 +76,7 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern void hs_inbox_mark_all_read(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_inbox_archive(byte[] id, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_inbox_unread_count(int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_chat_call(byte[] method, byte[] argsJson, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_get_preferences(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_preferences(byte[] json, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue);
@@ -226,6 +227,9 @@ namespace PushizoSdk.Internal
 
         public void InboxUnreadCount(NativeResult result) =>
             hs_inbox_unread_count(Register(s_results, result), s_resultCallback);
+
+        public void ChatCall(string method, string argsJson, NativeResult result) =>
+            hs_chat_call(Utf8(method), Utf8(argsJson), Register(s_results, result), s_resultCallback);
 
         public void GetPreferences(NativeResult result) =>
             hs_get_preferences(Register(s_results, result), s_resultCallback);
