@@ -38,6 +38,8 @@ namespace PushizoSdk
         public static NotificationsManager Notifications { get; } = new NotificationsManager();
         public static InAppMessagesManager InAppMessages { get; } = new InAppMessagesManager();
         public static InboxManager Inbox { get; } = new InboxManager();
+        /// <summary>Canlı sohbet (ADR-0040; Android ve iOS cihaz derlemeleri).</summary>
+        public static ChatManager Chat { get; } = new ChatManager();
         public static SessionManager Session { get; } = new SessionManager();
         public static LiveActivitiesManager LiveActivities { get; } = new LiveActivitiesManager();
         public static LocationManager Location { get; } = new LocationManager();
@@ -214,6 +216,15 @@ namespace PushizoSdk
                         if (parsed.Key != null) InAppMessages.DispatchLifecycle(parsed.Key, parsed.Value);
                         break;
                     }
+                    case "chat":
+                    {
+                        var chat = ChatJson.ParseEvent(json);
+                        if (chat != null) Chat.Dispatch(chat);
+                        break;
+                    }
+                    case "chatOpen":
+                        Chat.DispatchOpened(ChatJson.ParseOpened(json));
+                        break;
                     default:
                         SdkLog.Write(LogLevel.Debug, $"bilinmeyen yerel olay türü yok sayıldı: {type}");
                         break;
@@ -254,6 +265,7 @@ namespace PushizoSdk
                 User.PushSubscription.Reset();
                 Notifications.Reset();
                 InAppMessages.Reset();
+                Chat.Reset();
                 Debug.Reset();
                 SdkLog.Level = LogLevel.Warn;
             }

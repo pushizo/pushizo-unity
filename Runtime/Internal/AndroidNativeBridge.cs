@@ -133,6 +133,8 @@ namespace PushizoSdk.Internal
 
         public void InboxUnreadCount(NativeResult result) => Call("inboxUnreadCount", new ResultCallback(result));
 
+        public void ChatCall(string method, string argsJson, NativeResult result) => Call("chatCall", method, argsJson, new ResultCallback(result));
+
         public void GetPreferences(NativeResult result) => Call("getPreferences", new ResultCallback(result));
 
         public void SetPreferences(string preferencesJson, NativeResult result) => Call("setPreferences", preferencesJson, new ResultCallback(result));
