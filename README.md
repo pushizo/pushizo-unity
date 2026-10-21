@@ -1,9 +1,38 @@
+<!-- pushizo:header -->
+<p align="center">
+  <a href="https://pushizo.com"><img src="https://raw.githubusercontent.com/pushizo/.github/main/profile/assets/mark.svg" alt="Pushizo" width="56" height="56"></a>
+</p>
+<p align="center">
+  <a href="https://docs.pushizo.com/docs/sdk/unity"><img src="https://img.shields.io/badge/docs-docs.pushizo.com-5b4bdb" alt="Docs"></a>
+  <a href="https://docs.pushizo.com/docs/api"><img src="https://img.shields.io/badge/API-reference-b44fc4" alt="API reference"></a>
+  <a href="https://github.com/pushizo/pushizo-unity/blob/main/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-16130f" alt="License: MIT"></a>
+</p>
+<p align="center"><a href="#english">English</a> · <a href="#türkçe">Türkçe</a></p>
+
+## English
+
+**Pushizo Unity SDK** — Unity package (UPM) for push notifications, in-app messages, notification inbox, users, tags and aliases, and email and SMS subscriptions. Wraps the native Pushizo Android and iOS SDKs. Unity 2021.3+.
+
+> **Status:** The package installs from this repository; its native Android and iOS dependencies are being published to Maven Central and CocoaPods.<br>
+> **Durum:** Paket bu depodan kurulur; yerel Android ve iOS bağımlılıklarının Maven Central ve CocoaPods yayını hazırlanıyor.
+
+```json
+// Packages/manifest.json
+"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.1.0"
+```
+
+The detailed guide below is in Turkish; code samples are language-neutral. Full documentation:
+[docs.pushizo.com/docs/sdk/unity](https://docs.pushizo.com/docs/sdk/unity) · API reference: [docs.pushizo.com/docs/api](https://docs.pushizo.com/docs/api).
+
+## Türkçe
+<!-- /pushizo:header -->
+
 # Pushizo Unity SDK (`com.pushizo.unity`)
 
 Push bildirimleri, in-app mesajlar, bildirim kutusu, kullanıcı/tag/alias ve e-posta/SMS abonelikleri için Unity
 paketi (UPM). Yerel Pushizo Android (`com.pushizo:pushizo-android`) ve iOS (`Pushizo` Swift) SDK'larını
 sarar; tetik değerlendirme, çevrimdışı kuyruk, teslimat geri bildirimi ve in-app çizimi yerel SDK'dadır. API yüzeyi
-plan 06 §6.1 (eski sağlayıcı v5 ile uyumlu), Flutter eklentisi ve .NET MAUI SDK'sıyla aynıdır.
+eski sağlayıcı v5 ile uyumlu, Flutter eklentisi ve .NET MAUI SDK'sıyla aynıdır.
 
 | Platform | Davranış |
 |----------|----------|
@@ -21,7 +50,7 @@ Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](ht
 ```json
 {
   "dependencies": {
-    "com.pushizo.unity": "https://github.com/exec0de/pushizo-unity.git#0.1.0"
+    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.1.0"
   }
 }
 ```
@@ -50,10 +79,12 @@ APNs token'ı Unity'nin `UnityAppController` bildirimlerinden alınır; AppDeleg
 Xcode'da imzalama ekibini her iki hedef için seçin (Player Settings → iOS → Signing Team ID verildiyse otomatik).
 
 ### Yerel SDK'yı kaynaktan kullanma
-Yerel SDK'lar Maven Central/CocoaPods'a yayımlanana kadar (Faz 14):
-- Android: `gradle -p sdk/android :pushizo:publishToMavenLocal`, ardından Unity'de Player Settings → Publishing
-  Settings → Custom Main Gradle Template / Settings Template'te `mavenLocal()` deposunu ekleyin.
-- iOS: oluşan Podfile'da `pod 'Pushizo/App', :path => '<depo>/sdk/ios'` (ve NSE hedefinde `Pushizo/Extension`).
+Yerel SDK'lar Maven Central/CocoaPods'a yayımlanana kadar açık depolardan kullanılabilir:
+- Android: `git clone https://github.com/pushizo/pushizo-android && gradle -p pushizo-android :pushizo:publishToMavenLocal`,
+  ardından Unity'de Player Settings → Publishing Settings → Custom Main Gradle Template / Settings Template'te
+  `mavenLocal()` deposunu ekleyin.
+- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.1.0'`
+  (NSE hedefinde `Pushizo/Extension` aynı kaynakla).
 
 ## Kullanım
 
@@ -87,7 +118,7 @@ public class PushizoBootstrap : MonoBehaviour
         Pushizo.User.AddSms("+905321234567");
         Pushizo.User.SetLanguage("tr");
 
-        // Bildirim tercihleri (ADR-0019 §4): kategori × kanal (channel null = tüm kanallar)
+        // Bildirim tercihleri: kategori × kanal (channel null = tüm kanallar)
         var prefs = await Pushizo.User.GetPreferencesAsync();
         foreach (var category in prefs.Categories) Debug.Log(category.LocalizedName("tr"));
         await Pushizo.User.SetPreferencesAsync(new[]
@@ -122,7 +153,7 @@ sunucu hata kodu). `SetPreferencesAsync` girdiyi köprüden önce doğrular (1-1
 ### JWT ile kimlik doğrulama
 
 App ayarlarında kimlik doğrulama kipi (`identity_verification_mode`) `jwt` veya `both` ise kullanıcı, sunucunuzda
-imzalanmış kısa ömürlü bir ES256 JWT ile kimliklendirilir (ADR-0023 §9; talepler: `sub` = external_id, `aud` = app_id, `exp`/`iat` zorunlu, en çok 24 saat, yalnızca ES256).
+imzalanmış kısa ömürlü bir ES256 JWT ile kimliklendirilir (talepler: `sub` = external_id, `aud` = app_id, `exp`/`iat` zorunlu, en çok 24 saat, yalnızca ES256).
 
 ```csharp
 Pushizo.Login("user_42", jwt: jwtFromYourServer);                         // yalnızca JWT
@@ -142,7 +173,7 @@ Pushizo.Logout();
 
 ### Live Activities (iOS)
 
-Köprü, iOS SDK'nın genel türü `PushizoDefaultLiveActivityAttributes`'ı kullanır (ADR-0024). Dashboard/API'de Live
+Köprü, iOS SDK'nın genel türü `PushizoDefaultLiveActivityAttributes`'ı kullanır. Dashboard/API'de Live
 Activity türü adı tam olarak `PushizoDefaultLiveActivityAttributes` olmalıdır.
 
 ```csharp
@@ -192,7 +223,7 @@ await Pushizo.LiveActivities.StartDefaultLiveActivityAsync(
   (yerel SDK başlatılmadı), `INVALID_ARGUMENT`, `LIVE_ACTIVITY_FAILED` (Live Activities kapalı, `NSSupportsLiveActivities`
   eksik vb.). Sonuçlar ana iş parçacığında teslim edilir.
 - Tip-güvenli kendi `ActivityAttributes` türünüz için native tarafta `Pushizo.LiveActivities.register(MyAttributes.self)`
-  çağırın (ayrıntı: `docs/sdk/ios.md` "Live Activities").
+  çağırın (ayrıntı: [ios rehberi](https://docs.pushizo.com/docs/sdk/ios) "Live Activities").
 
 ### HTML in-app ve carousel
 
@@ -200,7 +231,7 @@ In-app mesajları yerel Android/iOS SDK'sı çizer; bu paket köprüdür. HTML i
 `close`/`click`/`addTag`/`trackEvent`) ve carousel blokları yerel SDK'dan olduğu gibi devralınır: ek kod veya
 yapılandırma gerekmez, tıklama ve yaşam döngüsü olayları mevcut in-app dinleyicilerine gelir. Yetenek bildirimi
 (`supports=html,carousel`) yerel SDK tarafından yapılır; desteklemeyen eski yerel sürümlere sunucu HTML mesaj göndermez
-ve carousel bloklarını çıkarır (ADR-0027 §6–7).
+ve carousel bloklarını çıkarır.
 
 ### Canlı sohbet
 
@@ -219,7 +250,7 @@ Ziyaretçi kimliği, çevrimdışı kuyruk (aynı `client_message_id` ile yenide
 geri çekilme + `after_seq` yoklaması) ve push ile gelen temsilci mesajları (`pushizo_chat`) yerel Android/iOS SDK'sındadır;
 `start` sonrası login/logout ve push aboneliği değişince bağlama yerel SDK'da yenilenir, logout ziyaretçiyi sıfırlar.
 Mesajlar `seq` ile sıralanır; ağ yokken gönderilen mesaj `pending` döner ve gönderilince olayla sunucu kopyası gelir.
-Ayrıntı: `docs/sdk/android.md` / `docs/sdk/ios.md` → "Canlı sohbet" (ADR-0040).
+Ayrıntı: [android rehberi](https://docs.pushizo.com/docs/sdk/android) / [ios rehberi](https://docs.pushizo.com/docs/sdk/ios) → "Canlı sohbet".
 Editor'de çağrılar `PushizoException` (`PLATFORM_NOT_SUPPORTED`) ile sonuçlanır.
 
 ### Konum
@@ -284,3 +315,24 @@ dosyasına `"testables": ["com.pushizo.unity"]` ekleyip Window → General → T
 
 Package Manager → Pushizo → Samples → **Demo** → Import. Boş bir sahnede bir GameObject'e `PushizoDemo`
 bileşenini ekleyip App ID ve API adresini girin.
+
+<!-- pushizo:footer -->
+---
+
+## Support · Destek
+
+- **Guide · Rehber:** [docs.pushizo.com/docs/sdk/unity](https://docs.pushizo.com/docs/sdk/unity)
+- **API reference & OpenAPI · API referansı ve OpenAPI:** [docs.pushizo.com/docs/api](https://docs.pushizo.com/docs/api) ·
+  [pushizo-openapi](https://github.com/pushizo/pushizo-openapi)
+- **Bugs & ideas · Hata ve öneri:** [Issues](https://github.com/pushizo/pushizo-unity/issues)
+- **Security · Güvenlik:** please do not open public issues; email [security@pushizo.com](mailto:security@pushizo.com) ·
+  herkese açık issue açmayın, bu adrese yazın.
+- **Help · Destek:** [support@pushizo.com](mailto:support@pushizo.com)
+
+This repository is mirrored automatically from the Pushizo main repository on every release. Please open an issue
+instead of a pull request; fixes land in the main repository and ship with the next release.
+Bu depo her sürümde Pushizo ana deposundan otomatik yansıtılır. Pull request yerine issue açın; düzeltmeler ana depoda
+yapılır ve bir sonraki sürümle buraya gelir.
+
+Released under the MIT License · MIT lisanslıdır — [LICENSE.md](https://github.com/pushizo/pushizo-unity/blob/main/LICENSE.md).
+<!-- /pushizo:footer -->

@@ -28,9 +28,9 @@
     }
   ],
   "changelogUrl": "https://docs.pushizo.com/docs/changelog",
-  "licensesUrl": "https://github.com/exec0de/pushizo-unity/blob/main/LICENSE.md",
+  "licensesUrl": "https://github.com/pushizo/pushizo-unity/blob/main/LICENSE.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/exec0de/pushizo-unity.git"
+    "url": "https://github.com/pushizo/pushizo-unity.git"
   }
 }
