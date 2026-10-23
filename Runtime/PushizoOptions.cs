@@ -19,7 +19,7 @@ namespace PushizoSdk
         /// <summary>Android 8+ varsayılan bildirim kanalı kimliği.</summary>
         public string AndroidDefaultChannelId { get; set; } = "pushizo_default";
 
-        /// <summary>iOS: NSE ile rozet sayacı paylaşımı için App Group (ör. <c>group.com.example.app</c>).</summary>
+        /// <summary>iOS: NSE ile rozet sayacı paylaşımı için App Group (ör. <c>group.com.pushizo.app</c>).</summary>
         public string? IosAppGroup { get; set; }
 
         /// <summary>iOS: APNs ortamı (<c>sandbox</c> / <c>production</c>); null ise provisioning profilinden tespit edilir.</summary>

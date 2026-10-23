@@ -41,12 +41,12 @@ namespace PushizoSdk.Tests
         [TestCase("{} x")]
         public void Json_rejects_invalid_input(string json) => Assert.Throws<FormatException>(() => Json.Parse(json));
 
-        [TestCase(" Ali.Veli@Example.COM ", "ali.veli@example.com")]
+        [TestCase(" Ali.Veli@Pushizo.COM ", "ali.veli@pushizo.com")]
         [TestCase("user+tag@sub.example.co", "user+tag@sub.example.co")]
         [TestCase("geçersiz", null)]
         [TestCase("a@b", null)]
-        [TestCase("a b@example.com", null)]
-        [TestCase("a@-example.com", null)]
+        [TestCase("a b@pushizo.com", null)]
+        [TestCase("a@-pushizo.com", null)]
         [TestCase("", null)]
         public void Email_vectors(string input, string? expected) => Assert.AreEqual(expected, Validation.NormalizeEmail(input));
 

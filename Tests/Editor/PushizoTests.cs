@@ -27,7 +27,7 @@ namespace PushizoSdk.Tests
         public void TearDown() => Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
 
         private static void Init(PushizoOptions? options = null) =>
-            Pushizo.Initialize("app_test", options ?? new PushizoOptions { ApiUrl = "https://api.example.com" });
+            Pushizo.Initialize("app_test", options ?? new PushizoOptions { ApiUrl = "https://api.pushizo.com" });
 
         [Test]
         public void Calls_before_initialize_throw_and_reads_are_safe()
@@ -44,7 +44,7 @@ namespace PushizoSdk.Tests
         public void Initialize_validates_and_passes_options()
         {
             Assert.Throws<ArgumentException>(() => Pushizo.Initialize(" "));
-            Assert.Throws<ArgumentException>(() => Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "api.example.com" }));
+            Assert.Throws<ArgumentException>(() => Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "api.pushizo.com" }));
 
             Pushizo.Debug.SetLogLevel(LogLevel.Info);
             Init(new PushizoOptions { ApiUrl = "http://10.0.2.2:4000", RequiresPrivacyConsent = true, LogLevel = LogLevel.Error, IosAppGroup = "group.x" });
@@ -68,7 +68,7 @@ namespace PushizoSdk.Tests
             Pushizo.User.AddTag("plan", "pro");
             Pushizo.User.RemoveTag("plan");
             Pushizo.User.AddAlias("crm_id", " 42 ");
-            Pushizo.User.AddEmail(" Ali.Veli@Example.COM ");
+            Pushizo.User.AddEmail(" Ali.Veli@Pushizo.COM ");
             Pushizo.User.AddSms("+90 (532) 123-45-67");
             Pushizo.User.SetLanguage(" tr ");
 
@@ -79,7 +79,7 @@ namespace PushizoSdk.Tests
                 @"addTags:{""plan"":""pro""}",
                 @"removeTags:[""plan""]",
                 @"addAliases:{""crm_id"":""42""}",
-                "addEmail:ali.veli@example.com",
+                "addEmail:ali.veli@pushizo.com",
                 "addSms:+905321234567",
                 "language:tr",
             }, _bridge.Calls);
@@ -564,12 +564,12 @@ namespace PushizoSdk.Tests
             Pushizo.Login("user_1");
             Pushizo.UpdateUserJwt("a.b.c");
             Pushizo.User.AddTags(new Dictionary<string, string> { ["plan"] = "pro" });
-            Pushizo.User.AddEmail("ali@example.com");
+            Pushizo.User.AddEmail("ali@pushizo.com");
             Pushizo.InAppMessages.AddTrigger("level", "gold");
 
             Assert.AreEqual("user_1", Pushizo.User.ExternalId);
             Assert.AreEqual("pro", Pushizo.User.GetTags()["plan"]);
-            CollectionAssert.AreEqual(new[] { "ali@example.com" }, Pushizo.User.Emails);
+            CollectionAssert.AreEqual(new[] { "ali@pushizo.com" }, Pushizo.User.Emails);
             Assert.AreEqual("gold", Pushizo.InAppMessages.GetTriggers()["level"]);
             Assert.IsFalse(Pushizo.Notifications.RequestPermissionAsync().Result);
             var inbox = Pushizo.Inbox.ListAsync();

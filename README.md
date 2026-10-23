@@ -13,8 +13,8 @@
 
 **Pushizo Unity SDK** — Unity package (UPM) for push notifications, in-app messages, notification inbox, users, tags and aliases, and email and SMS subscriptions. Wraps the native Pushizo Android and iOS SDKs. Unity 2021.3+.
 
-> **Status:** The package installs from this repository; its native Android and iOS dependencies are being published to Maven Central and CocoaPods.<br>
-> **Durum:** Paket bu depodan kurulur; yerel Android ve iOS bağımlılıklarının Maven Central ve CocoaPods yayını hazırlanıyor.
+> **Status:** OpenUPM lists com.pushizo.unity 0.1.0. Android artifacts are on Maven Central; the iOS CocoaPods pod is still being published.<br>
+> **Durum:** OpenUPM'de com.pushizo.unity 0.1.0 yayında. Android artefaktları Maven Central'da; iOS CocoaPods pod'unun yayını hazırlanıyor.
 
 ```json
 // Packages/manifest.json
@@ -99,7 +99,7 @@ public class PushizoBootstrap : MonoBehaviour
 
     private async void Start()
     {
-        Pushizo.Initialize("app_…", new PushizoOptions { ApiUrl = "https://api.example.com" });
+        Pushizo.Initialize("app_…", new PushizoOptions { ApiUrl = "https://api.pushizo.com" });
 
         Pushizo.Notifications.Clicked += e => Debug.Log($"Tıklandı: {e.Url}");
         Pushizo.Notifications.ForegroundWillDisplay += e =>
@@ -114,7 +114,7 @@ public class PushizoBootstrap : MonoBehaviour
         Pushizo.Login("user_42");                     // identity verification açıksa: Login(id, identityHash)
         Pushizo.User.AddTags(new Dictionary<string, string> { ["level"] = "12" });
         Pushizo.User.AddAlias("crm_id", "42");
-        Pushizo.User.AddEmail("ali@example.com");
+        Pushizo.User.AddEmail("ali@pushizo.com");
         Pushizo.User.AddSms("+905321234567");
         Pushizo.User.SetLanguage("tr");
 

@@ -10,7 +10,7 @@ namespace PushizoSdk
     /// iOS'ta yerel <c>Pushizo</c> Swift SDK'sı kullanılır; Editor'de çağrılar günlüğe yazılır. Tüm olaylar ve
     /// eşzamansız sonuçlar Unity ana iş parçacığında teslim edilir.
     /// <code>
-    /// Pushizo.Initialize("app_…", new PushizoOptions { ApiUrl = "https://api.example.com" });
+    /// Pushizo.Initialize("app_…", new PushizoOptions { ApiUrl = "https://api.pushizo.com" });
     /// await Pushizo.Notifications.RequestPermissionAsync();
     /// Pushizo.Login("user_42");
     /// Pushizo.User.AddTag("plan", "pro");
