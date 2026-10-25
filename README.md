@@ -13,9 +13,6 @@
 
 **Pushizo Unity SDK** — Unity package (UPM) for push notifications, in-app messages, notification inbox, users, tags and aliases, and email and SMS subscriptions. Wraps the native Pushizo Android and iOS SDKs. Unity 2021.3+.
 
-> **Status:** OpenUPM lists com.pushizo.unity 0.1.0. Android artifacts are on Maven Central; the iOS CocoaPods pod is still being published.<br>
-> **Durum:** OpenUPM'de com.pushizo.unity 0.1.0 yayında. Android artefaktları Maven Central'da; iOS CocoaPods pod'unun yayını hazırlanıyor.
-
 ```json
 // Packages/manifest.json
 "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.1.0"
