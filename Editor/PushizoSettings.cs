@@ -25,7 +25,7 @@ namespace PushizoSdk.Editor
         [Tooltip("iOS: aps-environment (development: geliştirme profili, production: TestFlight/App Store).")]
         public bool iosApnsDevelopment = true;
 
-        [Tooltip("iOS: uygulama ve NSE arasında rozet sayacı paylaşımı için App Group (ör. group.com.example.app). Boşsa eklenmez.")]
+        [Tooltip("iOS: uygulama ve NSE arasında rozet sayacı paylaşımı için App Group (ör. group.com.pushizo.app). Boşsa eklenmez.")]
         public string iosAppGroup = string.Empty;
 
         [Tooltip("Android: Firebase konsolundan indirilen google-services.json yolu (proje köküne göre).")]

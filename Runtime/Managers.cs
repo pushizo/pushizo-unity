@@ -539,7 +539,8 @@ namespace PushizoSdk
     }
 
     /// <summary>
-    /// Konum paylaşımı (<c>Pushizo.Location</c>, v2 Faz 17b). Yalnızca ön planda çalışır (arka plan konumu yok):
+    /// Konum paylaşımı (<c>Pushizo.Location</c>, v2 Faz 17b). Konum yalnızca ön planda okunur (arka planda koordinat
+    /// toplanmaz; bölge izleme için <see cref="SetGeofencingEnabled"/>):
     /// paylaşım açık ve izin varken yerel SDK oturum başında ve uygulama ön plana döndüğünde en sık 5 dakikada bir
     /// yaklaşık konumu push aboneliğine yazar. İzin yoksa veya gizlilik onayı verilmemişse (<see cref="Pushizo.SetConsentGiven"/>)
     /// hiçbir şey gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır; <see cref="SetShared"/>(false) konumu ve
@@ -571,6 +572,105 @@ namespace PushizoSdk
         {
             var text = string.IsNullOrWhiteSpace(rationale) ? null : rationale!.Trim();
             return Pushizo.CallBool((bridge, done) => bridge.RequestLocationPermission(text, done));
+        }
+
+        /// <summary>Arka plan bölge izleme açık mı (kalıcı tercih; varsayılan kapalı). Başlatılmadan önce false.</summary>
+        public bool IsGeofencingEnabled => Pushizo.BridgeOrNull()?.GetGeofencingEnabled() ?? false;
+
+        /// <summary>
+        /// Arka plan bölge izlemeyi açar/kapatır (ADR-0065). İzlemeyi işletim sistemi yapar; sunucuya koordinat gitmez,
+        /// yalnızca bölgeye giriş ve çıkış bildirilir. İzleme için <see cref="SetShared"/> açık ve arka plan konum izni
+        /// (iOS "her zaman", Android <c>ACCESS_BACKGROUND_LOCATION</c>) verilmiş olmalıdır. Bu çağrı izin istemez; paket
+        /// manifest'e veya Info.plist'e izin eklemez. Android'de uygulamada <c>play-services-location</c> yoksa izleme
+        /// başlamaz (uyarı günlüğü). Editor'de tercih yalnızca bellekte tutulur.
+        /// </summary>
+        public void SetGeofencingEnabled(bool enabled) => Pushizo.Bridge().SetGeofencingEnabled(enabled);
+    }
+
+    /// <summary>
+    /// Özellik bayrakları (<c>Pushizo.FeatureFlags</c>, ADR-0066). Değerler yerel SDK'da oturum başında yenilenir ve
+    /// cihazda saklanır; okumalar eşzamanlıdır ve ağ çağrısı yapmaz. Editor ve yerel SDK'sı olmayan platformlarda
+    /// okumalar varsayılan değeri, <see cref="RefreshAsync"/> false döndürür.
+    /// </summary>
+    public sealed class FeatureFlagsManager
+    {
+        internal FeatureFlagsManager()
+        {
+        }
+
+        /// <summary>
+        /// Değerleri hemen yeniler; sonuç (ana iş parçacığında) değerlerin güncellenip güncellenmediğidir. Hata son
+        /// değerleri korur; gizlilik onayı beklenirken istek gönderilmez (false).
+        /// </summary>
+        public Task<bool> RefreshAsync() => Pushizo.CallBool((bridge, done) => bridge.FeatureFlagsRefresh(done));
+
+        /// <summary>Bayrak bu kullanıcı için açık mı; değer henüz yoksa (ya da SDK başlatılmadıysa) <paramref name="defaultValue"/>.</summary>
+        public bool IsEnabled(string key, bool defaultValue = false)
+        {
+            var bridge = Pushizo.BridgeOrNull();
+            return bridge is null || string.IsNullOrEmpty(key) ? defaultValue : bridge.FeatureFlagIsEnabled(key, defaultValue);
+        }
+
+        /// <summary>
+        /// Bayrağın değeri: metin, <c>long</c>, <c>double</c>, <c>bool</c>, <c>Dictionary&lt;string, object?&gt;</c> veya
+        /// <c>List&lt;object?&gt;</c>; değer yoksa (ya da SDK başlatılmadıysa) <paramref name="defaultValue"/>.
+        /// </summary>
+        public object? GetValue(string key, object? defaultValue = null)
+        {
+            var bridge = Pushizo.BridgeOrNull();
+            if (bridge is null || string.IsNullOrEmpty(key)) return defaultValue;
+            return BridgeJson.ParseFeatureFlagValue(bridge.FeatureFlagValue(key), defaultValue);
+        }
+    }
+
+    /// <summary>
+    /// Gömülü yerleşimler (<c>Pushizo.Placements</c>, ADR-0068): uygulamanın ayırdığı alana içerik. Model döner, çizim
+    /// oyunundur (<see cref="InAppMessage.Json"/> sunucudaki ham mesajdır); içerik ekrana gelince
+    /// <see cref="ReportImpression"/> çağrılır. Olay bildirimleri yerel SDK'nın çevrimdışı kuyruğundan gider.
+    /// </summary>
+    public sealed class PlacementsManager
+    {
+        internal PlacementsManager()
+        {
+        }
+
+        /// <summary>
+        /// Alanın içeriği (<paramref name="limit"/> 1-10); sonuç ana iş parçacığında teslim edilir. Abonelik yoksa, gizlilik
+        /// onayı bekleniyorsa veya Editor'de liste boştur. Anahtar küçük harfle başlar; küçük harf, rakam ve <c>_ . -</c>
+        /// (en fazla 64 karakter); geçersiz anahtarda <see cref="ArgumentException"/>, geçersiz limitte
+        /// <see cref="ArgumentOutOfRangeException"/>.
+        /// </summary>
+        public Task<IReadOnlyList<InAppMessage>> ListAsync(string key, int limit = 1)
+        {
+            var valid = Validation.RequirePlacementKey(key, nameof(key));
+            Validation.RequirePlacementLimit(limit, nameof(limit));
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(
+                r => bridge.PlacementsList(valid, limit, r),
+                json => BridgeJson.ParsePlacementMessages(json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.")));
+        }
+
+        /// <summary>İçerik ekranda göründü.</summary>
+        public void ReportImpression(InAppMessage message) => Report(message, "impression", null);
+
+        /// <summary>İçerikteki düğmeye tıklandı (<paramref name="buttonId"/>: mesajdaki düğme kimliği).</summary>
+        public void ReportClick(InAppMessage message, string buttonId)
+        {
+            if (string.IsNullOrWhiteSpace(buttonId)) throw new ArgumentException("Düğme kimliği gerekli.", nameof(buttonId));
+            Report(message, "click", buttonId);
+        }
+
+        /// <summary>Kullanıcı içeriği kapattı.</summary>
+        public void ReportDismiss(InAppMessage message) => Report(message, "dismiss", null);
+
+        /// <summary>
+        /// Yerel köprü, <see cref="ListAsync"/> ile dönen son mesajları kimliğe göre tutar (en çok 50); orada olmayan mesajın
+        /// bildirimi yok sayılır.
+        /// </summary>
+        private static void Report(InAppMessage message, string eventName, string? buttonId)
+        {
+            if (message is null) throw new ArgumentNullException(nameof(message));
+            Pushizo.Bridge().PlacementsReport(message.Id, eventName, buttonId);
         }
     }
 

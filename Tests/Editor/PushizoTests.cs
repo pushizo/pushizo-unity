@@ -27,7 +27,7 @@ namespace PushizoSdk.Tests
         public void TearDown() => Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
 
         private static void Init(PushizoOptions? options = null) =>
-            Pushizo.Initialize("app_test", options ?? new PushizoOptions { ApiUrl = "https://api.example.com" });
+            Pushizo.Initialize("app_test", options ?? new PushizoOptions { ApiUrl = "https://api.pushizo.com" });
 
         [Test]
         public void Calls_before_initialize_throw_and_reads_are_safe()
@@ -44,7 +44,7 @@ namespace PushizoSdk.Tests
         public void Initialize_validates_and_passes_options()
         {
             Assert.Throws<ArgumentException>(() => Pushizo.Initialize(" "));
-            Assert.Throws<ArgumentException>(() => Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "api.example.com" }));
+            Assert.Throws<ArgumentException>(() => Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "api.pushizo.com" }));
 
             Pushizo.Debug.SetLogLevel(LogLevel.Info);
             Init(new PushizoOptions { ApiUrl = "http://10.0.2.2:4000", RequiresPrivacyConsent = true, LogLevel = LogLevel.Error, IosAppGroup = "group.x" });
@@ -68,7 +68,7 @@ namespace PushizoSdk.Tests
             Pushizo.User.AddTag("plan", "pro");
             Pushizo.User.RemoveTag("plan");
             Pushizo.User.AddAlias("crm_id", " 42 ");
-            Pushizo.User.AddEmail(" Ali.Veli@Example.COM ");
+            Pushizo.User.AddEmail(" Ali.Veli@Pushizo.COM ");
             Pushizo.User.AddSms("+90 (532) 123-45-67");
             Pushizo.User.SetLanguage(" tr ");
 
@@ -79,7 +79,7 @@ namespace PushizoSdk.Tests
                 @"addTags:{""plan"":""pro""}",
                 @"removeTags:[""plan""]",
                 @"addAliases:{""crm_id"":""42""}",
-                "addEmail:ali.veli@example.com",
+                "addEmail:ali.veli@pushizo.com",
                 "addSms:+905321234567",
                 "language:tr",
             }, _bridge.Calls);
@@ -555,6 +555,171 @@ namespace PushizoSdk.Tests
         }
 
         [Test]
+        public void Geofencing_preference_is_forwarded_without_permission_request()
+        {
+            Assert.IsFalse(Pushizo.Location.IsGeofencingEnabled);
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Location.SetGeofencingEnabled(true));
+            Init();
+            _bridge.Calls.Clear();
+
+            Pushizo.Location.SetGeofencingEnabled(true);
+            Assert.IsTrue(Pushizo.Location.IsGeofencingEnabled);
+            Pushizo.Location.SetGeofencingEnabled(false);
+            Assert.IsFalse(Pushizo.Location.IsGeofencingEnabled);
+
+            // Köprü izin istemez: yalnızca tercih çağrıları gider.
+            CollectionAssert.AreEqual(new[] { "geofencingEnabled:True", "geofencingEnabled:False" }, _bridge.Calls);
+        }
+
+        [Test]
+        public void Feature_flags_read_bridge_values_and_fall_back_to_defaults()
+        {
+            Assert.IsFalse(Pushizo.FeatureFlags.IsEnabled("new_shop"));
+            Assert.IsTrue(Pushizo.FeatureFlags.IsEnabled("new_shop", defaultValue: true));
+            Assert.AreEqual("x", Pushizo.FeatureFlags.GetValue("theme", "x"));
+            Assert.Throws<InvalidOperationException>(() => Pushizo.FeatureFlags.RefreshAsync());
+            Assert.IsEmpty(_bridge.Calls);
+
+            Init();
+            _bridge.Calls.Clear();
+            _bridge.FeatureFlagEnabled["new_shop"] = true;
+            _bridge.FeatureFlagValues["theme"] = @"{""value"":""dark""}";
+            _bridge.FeatureFlagValues["max_items"] = @"{""value"":12}";
+            _bridge.FeatureFlagValues["ratio"] = @"{""value"":0.25}";
+            _bridge.FeatureFlagValues["beta"] = @"{""value"":true}";
+            _bridge.FeatureFlagValues["layout"] = @"{""value"":{""columns"":3,""tags"":[""a"",""b""]}}";
+            _bridge.FeatureFlagValues["missing"] = @"{""value"":null}";
+
+            Assert.IsTrue(Pushizo.FeatureFlags.IsEnabled("new_shop"));
+            Assert.IsFalse(Pushizo.FeatureFlags.IsEnabled("unknown"));
+            Assert.IsTrue(Pushizo.FeatureFlags.IsEnabled("unknown", defaultValue: true));
+            Assert.AreEqual("dark", Pushizo.FeatureFlags.GetValue("theme"));
+            Assert.AreEqual(12L, Pushizo.FeatureFlags.GetValue("max_items"));
+            Assert.AreEqual(0.25, Pushizo.FeatureFlags.GetValue("ratio"));
+            Assert.AreEqual(true, Pushizo.FeatureFlags.GetValue("beta"));
+            var layout = (Dictionary<string, object?>)Pushizo.FeatureFlags.GetValue("layout")!;
+            Assert.AreEqual(3L, layout["columns"]);
+            Assert.AreEqual(2, ((List<object?>)layout["tags"]!).Count);
+            Assert.AreEqual("fallback", Pushizo.FeatureFlags.GetValue("missing", "fallback"));
+            Assert.IsNull(Pushizo.FeatureFlags.GetValue("unknown"));
+            Assert.AreEqual(7, Pushizo.FeatureFlags.GetValue("unknown", 7));
+            // Boş anahtar köprüye gitmez; varsayılan döner.
+            Assert.IsTrue(Pushizo.FeatureFlags.IsEnabled("", defaultValue: true));
+            Assert.AreEqual("d", Pushizo.FeatureFlags.GetValue("", "d"));
+
+            var refreshed = Pushizo.FeatureFlags.RefreshAsync();
+            Assert.IsTrue(refreshed.IsCompleted);
+            Assert.IsTrue(refreshed.Result);
+            _bridge.FeatureFlagsRefreshResult = false;
+            Assert.IsFalse(Pushizo.FeatureFlags.RefreshAsync().Result);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "featureFlagIsEnabled:new_shop:False",
+                "featureFlagIsEnabled:unknown:False",
+                "featureFlagIsEnabled:unknown:True",
+                "featureFlagValue:theme",
+                "featureFlagValue:max_items",
+                "featureFlagValue:ratio",
+                "featureFlagValue:beta",
+                "featureFlagValue:layout",
+                "featureFlagValue:missing",
+                "featureFlagValue:unknown",
+                "featureFlagValue:unknown",
+                "featureFlagsRefresh",
+                "featureFlagsRefresh",
+            }, _bridge.Calls);
+        }
+
+        [Test]
+        public void Placements_list_parses_messages_and_reports_reach_bridge()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            _bridge.PlacementsJson =
+                @"{""messages"":[{""id"":""iam_1"",""json"":""{\""id\"":\""iam_1\"",\""display\"":{}}""},{""id"":""iam_2"",""json"":null},{""json"":""{}""}]}";
+
+            var list = Pushizo.Placements.ListAsync("home.banner", limit: 3);
+            Assert.IsTrue(list.IsCompleted);
+            Assert.AreEqual(2, list.Result.Count);
+            Assert.AreEqual("iam_1", list.Result[0].Id);
+            Assert.AreEqual(@"{""id"":""iam_1"",""display"":{}}", list.Result[0].Json);
+            Assert.IsNull(list.Result[1].Json);
+
+            _bridge.PlacementsJson = @"{""messages"":[]}";
+            Assert.AreEqual(0, Pushizo.Placements.ListAsync("home_banner-2").Result.Count);
+
+            Pushizo.Placements.ReportImpression(list.Result[0]);
+            Pushizo.Placements.ReportClick(list.Result[0], "buy");
+            Pushizo.Placements.ReportDismiss(list.Result[1]);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "placementsList:home.banner:3",
+                "placementsList:home_banner-2:1",
+                "placementsReport:iam_1:impression:<null>",
+                "placementsReport:iam_1:click:buy",
+                "placementsReport:iam_2:dismiss:<null>",
+            }, _bridge.Calls);
+
+            _bridge.PlacementsErrorCode = "INVALID_ARGUMENT";
+            var failed = Pushizo.Placements.ListAsync("home");
+            Assert.IsTrue(failed.IsFaulted);
+            Assert.AreEqual("INVALID_ARGUMENT", ((PushizoException)failed.Exception!.InnerException!).Code);
+        }
+
+        [Test]
+        public void Placements_validate_key_limit_and_button_before_bridge()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync("Home"));
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync("1home"));
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync(""));
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync(null!));
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync("home banner"));
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync("home\n"));
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ListAsync("a" + new string('b', 64)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Pushizo.Placements.ListAsync("home", 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Pushizo.Placements.ListAsync("home", 11));
+
+            _bridge.PlacementsJson = @"{""messages"":[{""id"":""iam_1""}]}";
+            var message = Pushizo.Placements.ListAsync("a" + new string('b', 63), 10).Result[0];
+            Assert.Throws<ArgumentException>(() => Pushizo.Placements.ReportClick(message, " "));
+            Assert.Throws<ArgumentNullException>(() => Pushizo.Placements.ReportImpression(null!));
+
+            CollectionAssert.AreEqual(new[] { "placementsList:a" + new string('b', 63) + ":10" }, _bridge.Calls);
+        }
+
+        [Test]
+        public void Placements_before_initialize_throw()
+        {
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Placements.ListAsync("home"));
+            Assert.IsEmpty(_bridge.Calls);
+        }
+
+        [Test]
+        public void Editor_bridge_keeps_geofencing_in_memory_and_returns_flag_defaults_and_empty_placements()
+        {
+            Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+            Init();
+            Assert.IsFalse(Pushizo.Location.IsGeofencingEnabled);
+            Pushizo.Location.SetGeofencingEnabled(true);
+            Assert.IsTrue(Pushizo.Location.IsGeofencingEnabled);
+            Pushizo.Location.SetGeofencingEnabled(false);
+            Assert.IsFalse(Pushizo.Location.IsGeofencingEnabled);
+
+            Assert.IsFalse(Pushizo.FeatureFlags.RefreshAsync().Result);
+            Assert.IsTrue(Pushizo.FeatureFlags.IsEnabled("x", defaultValue: true));
+            Assert.AreEqual("d", Pushizo.FeatureFlags.GetValue("x", "d"));
+            Assert.IsNull(Pushizo.FeatureFlags.GetValue("x"));
+
+            var list = Pushizo.Placements.ListAsync("home");
+            Assert.IsTrue(list.IsCompleted);
+            Assert.IsEmpty(list.Result);
+        }
+
+        [Test]
         public void Editor_bridge_simulates_state_without_native_sdk()
         {
             Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
@@ -564,12 +729,12 @@ namespace PushizoSdk.Tests
             Pushizo.Login("user_1");
             Pushizo.UpdateUserJwt("a.b.c");
             Pushizo.User.AddTags(new Dictionary<string, string> { ["plan"] = "pro" });
-            Pushizo.User.AddEmail("ali@example.com");
+            Pushizo.User.AddEmail("ali@pushizo.com");
             Pushizo.InAppMessages.AddTrigger("level", "gold");
 
             Assert.AreEqual("user_1", Pushizo.User.ExternalId);
             Assert.AreEqual("pro", Pushizo.User.GetTags()["plan"]);
-            CollectionAssert.AreEqual(new[] { "ali@example.com" }, Pushizo.User.Emails);
+            CollectionAssert.AreEqual(new[] { "ali@pushizo.com" }, Pushizo.User.Emails);
             Assert.AreEqual("gold", Pushizo.InAppMessages.GetTriggers()["level"]);
             Assert.IsFalse(Pushizo.Notifications.RequestPermissionAsync().Result);
             var inbox = Pushizo.Inbox.ListAsync();

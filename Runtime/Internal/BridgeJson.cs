@@ -125,6 +125,33 @@ namespace PushizoSdk.Internal
             return new UserPreferences(preferences, categories);
         }
 
+        /// <summary>
+        /// <c>{"value":…}</c> (<see cref="INativeBridge.FeatureFlagValue"/>): metin, long, double, bool, sözlük veya liste;
+        /// yanıt boşsa ya da değer yoksa <paramref name="fallback"/>.
+        /// </summary>
+        public static object? ParseFeatureFlagValue(string? json, object? fallback)
+        {
+            if (string.IsNullOrEmpty(json)) return fallback;
+            return Object(json!).TryGetValue("value", out var value) && value != null ? value : fallback;
+        }
+
+        /// <summary><c>{"messages":[{"id","json"}]}</c> (<see cref="INativeBridge.PlacementsList"/>); kimliksiz öğe atlanır.</summary>
+        public static IReadOnlyList<InAppMessage> ParsePlacementMessages(string json)
+        {
+            var messages = new List<InAppMessage>();
+            if (Object(json).TryGetValue("messages", out var arr) && arr is List<object?> list)
+            {
+                foreach (var element in list)
+                {
+                    if (!(element is Dictionary<string, object?> e)) continue;
+                    var id = Str(e, "id");
+                    if (string.IsNullOrEmpty(id)) continue;
+                    messages.Add(new InAppMessage(id!, Str(e, "json")));
+                }
+            }
+            return messages;
+        }
+
         /// <summary>Tercih girdileri → <c>[{"category","channel","optedIn"}]</c> (kanal yoksa JSON null).</summary>
         public static string PreferencesToJson(IEnumerable<PreferenceInput> preferences) =>
             Json.Serialize(preferences.Select(p => (object?)new Dictionary<string, object?>

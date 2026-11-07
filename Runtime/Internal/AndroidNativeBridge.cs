@@ -164,6 +164,21 @@ namespace PushizoSdk.Internal
             Call("requestLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
         }
 
+        public bool GetGeofencingEnabled() => Call<bool>("geofencingEnabled");
+
+        public void SetGeofencingEnabled(bool enabled) => Call("setGeofencingEnabled", enabled);
+
+        public void FeatureFlagsRefresh(Action<bool> completion) => Call("featureFlagsRefresh", new PermissionCallback(completion));
+
+        public bool FeatureFlagIsEnabled(string key, bool defaultValue) => Call<bool>("featureFlagIsEnabled", key, defaultValue);
+
+        public string? FeatureFlagValue(string key) => NullIfEmpty(Call<string>("featureFlagValue", key));
+
+        public void PlacementsList(string key, int limit, NativeResult result) => Call("placementsList", key, limit, new ResultCallback(result));
+
+        public void PlacementsReport(string messageId, string eventName, string? buttonId) =>
+            Call("placementsReport", messageId, eventName, Text(buttonId));
+
         /// <summary><c>PushizoUnityListener</c>; yerel iş parçacığından çağrılır (ana iş parçacığına Pushizo taşır).</summary>
         private sealed class EventListener : AndroidJavaProxy
         {
@@ -186,6 +201,7 @@ namespace PushizoSdk.Internal
             public void onResult(string? json, string? errorCode, string? errorMessage) => _result(json, errorCode, errorMessage);
         }
 
+        /// <summary><c>PushizoUnityPermissionCallback</c>: tek bool sonuçlu geri çağrı (izin istekleri, bayrak yenileme).</summary>
         private sealed class PermissionCallback : AndroidJavaProxy
         {
             private readonly Action<bool> _completion;

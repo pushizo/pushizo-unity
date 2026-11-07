@@ -119,6 +119,19 @@ namespace PushizoSdk.Internal
         }
 
         // \z: .NET'te $ sondaki satır sonunu da kabul eder.
+        private static readonly Regex PlacementKeyRegex = new Regex(@"^[a-z][a-z0-9_.-]{0,63}\z", RegexOptions.CultureInvariant);
+
+        /// <summary>Yerleşim anahtarı (yerel SDK kuralı): küçük harfle başlar; küçük harf, rakam ve <c>_ . -</c>; en çok 64 karakter.</summary>
+        public static string RequirePlacementKey(string key, string paramName) =>
+            key != null && PlacementKeyRegex.IsMatch(key)
+                ? key
+                : throw new ArgumentException("Geçersiz yerleşim anahtarı: küçük harfle başlamalı; küçük harf, rakam ve _ . - (en fazla 64).", paramName);
+
+        public static void RequirePlacementLimit(int limit, string paramName)
+        {
+            if (limit < 1 || limit > 10) throw new ArgumentOutOfRangeException(paramName, limit, "limit 1-10 olmalı.");
+        }
+
         private static readonly Regex LiveActivityIdRegex = new Regex(@"^[A-Za-z0-9_.:-]{1,100}\z", RegexOptions.CultureInvariant);
 
         /// <summary>Live Activity alan anahtarı üst sınırı (yerel SDK ve sunucu).</summary>

@@ -22,7 +22,7 @@ namespace PushizoSdk.Tests
         {
             _bridge = new FakeNativeBridge();
             Pushizo.ResetForTests(_bridge, new ImmediateDispatcher());
-            Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "https://api.example.com" });
+            Pushizo.Initialize("app_test", new PushizoOptions { ApiUrl = "https://api.pushizo.com" });
         }
 
         [TearDown]
@@ -88,7 +88,7 @@ namespace PushizoSdk.Tests
             Assert.AreEqual(count, _bridge.ChatCalls.Count);
 
             _bridge.ChatResponses["leaveOfflineMessage"] = new KeyValuePair<string?, string?>(null, "HS_PLAN_FEATURE_REQUIRED");
-            var failed = Pushizo.Chat.LeaveOfflineMessageAsync("ali@example.com", "Arayın");
+            var failed = Pushizo.Chat.LeaveOfflineMessageAsync("ali@pushizo.com", "Arayın");
             Assert.IsTrue(failed.IsFaulted);
             Assert.AreEqual("HS_PLAN_FEATURE_REQUIRED", ((PushizoException)failed.Exception!.InnerException!).Code);
         }

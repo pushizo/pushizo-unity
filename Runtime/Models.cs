@@ -240,7 +240,7 @@ namespace PushizoSdk
         public string? Channel { get; }
     }
 
-    /// <summary>In-app mesaj özeti (yaşam döngüsü olaylarında).</summary>
+    /// <summary>In-app mesaj özeti (yaşam döngüsü olaylarında ve gömülü yerleşimlerde).</summary>
     public sealed class InAppMessage
     {
         internal InAppMessage(string id, string? json)

@@ -18,7 +18,7 @@ public typealias HSUEventCallback = @convention(c) (UnsafePointer<CChar>?, Unsaf
 public typealias HSUResultCallback = @convention(c) (Int32, UnsafePointer<CChar>?, UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Void
 public typealias HSUPermissionCallback = @convention(c) (Int32, Int32) -> Void
 
-/// Köprü durumu (olay geri çağrısı, ön plan kararları, izin önbelleği, Unity APNs token gözlemcisi).
+/// Köprü durumu (olay geri çağrısı, ön plan kararları, izin önbelleği, yerleşim mesajları, Unity APNs token gözlemcisi).
 final class HSUnityBridgeState: NSObject {
     static let shared = HSUnityBridgeState()
 
@@ -31,6 +31,29 @@ final class HSUnityBridgeState: NSObject {
     var cachedPermission = false
     var cachedStateKnown = false
     let lifecycleRelay = HSUnityLifecycleRelay()
+
+    private static let maxPlacementMessages = 50
+    private var placementMessages: [String: HSInAppMessage] = [:]
+    private var placementOrder: [String] = []
+
+    /// Son `hs_placements_list` çağrılarından dönen mesajları kimliğe göre tutar; olay bildirimleri yerel modeli buradan
+    /// bulur. Yeniden gelen mesaj sona alınır, sınır aşılınca en eski kayıtlar düşer.
+    func cachePlacementMessages(_ messages: [HSInAppMessage]) {
+        lock.lock(); defer { lock.unlock() }
+        for message in messages {
+            placementOrder.removeAll { $0 == message.id }
+            placementOrder.append(message.id)
+            placementMessages[message.id] = message
+        }
+        while placementOrder.count > HSUnityBridgeState.maxPlacementMessages {
+            placementMessages.removeValue(forKey: placementOrder.removeFirst())
+        }
+    }
+
+    func placementMessage(_ id: String) -> HSInAppMessage? {
+        lock.lock(); defer { lock.unlock() }
+        return placementMessages[id]
+    }
 
     /// UnityAppController APNs token'ını ve hatasını NSNotification ile yayınlar (Plugins/iOS AppDelegateListener).
     func observeUnityAppController() {
@@ -754,5 +777,73 @@ public func hs_location_request_permission(_ rationale: UnsafePointer<CChar>?, _
     let text = hsuNonEmpty(rationale)
     Pushizo.Location.requestPermission(rationale: text) { granted in
         callback?(requestId, granted ? 1 : 0)
+    }
+}
+
+// MARK: - Bölge izleme (ADR-0065)
+
+/// Arka plan bölge izleme açık mı (yerel SDK'nın kalıcı tercihi; varsayılan kapalı).
+@_cdecl("hs_location_is_geofencing_enabled")
+public func hs_location_is_geofencing_enabled() -> Int32 { Pushizo.Location.isGeofencingEnabled ? 1 : 0 }
+
+/// Bölge izlemeyi açar/kapatır. Köprü izin istemez ve Info.plist'e açıklama eklemez: paylaşım (`hs_location_set_shared`),
+/// "her zaman" konum izni ve `NSLocationAlwaysAndWhenInUseUsageDescription` uygulamadadır.
+@_cdecl("hs_location_set_geofencing_enabled")
+public func hs_location_set_geofencing_enabled(_ enabled: Int32) { Pushizo.Location.setGeofencingEnabled(enabled != 0) }
+
+// MARK: - Özellik bayrakları (ADR-0066)
+
+/// Değerleri hemen yeniler; sonuç değerlerin güncellenip güncellenmediğidir (1/0).
+@_cdecl("hs_feature_flags_refresh")
+public func hs_feature_flags_refresh(_ requestId: Int32, _ callback: HSUPermissionCallback?) {
+    Task {
+        let refreshed = await Pushizo.FeatureFlags.refresh()
+        callback?(requestId, refreshed ? 1 : 0)
+    }
+}
+
+@_cdecl("hs_feature_flags_is_enabled")
+public func hs_feature_flags_is_enabled(_ key: UnsafePointer<CChar>?, _ defaultValue: Int32) -> Int32 {
+    Pushizo.FeatureFlags.isEnabled(hsuString(key) ?? "", default: defaultValue != 0) ? 1 : 0
+}
+
+/// Bayrağın değeri `{"value":…}` olarak (metin, sayı, mantıksal, sözlük veya dizi); değer yoksa nil. C# `hs_free` ile
+/// serbest bırakır.
+@_cdecl("hs_feature_flags_value")
+public func hs_feature_flags_value(_ key: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let value = Pushizo.FeatureFlags.value(hsuString(key) ?? "") else { return nil }
+    return hsuDup(hsuJsonString(["value": value]))
+}
+
+// MARK: - Gömülü yerleşimler (ADR-0068)
+
+/// Başarı JSON'u: `{"messages":[{"id","json"}]}` (`json`: sunucudaki ham mesaj). Anahtar ve limit doğrulaması yerel
+/// SDK'dadır (geçersizse INVALID_ARGUMENT); abonelik yoksa liste boştur. Dönen mesajlar `hs_placements_report` için
+/// önbelleğe alınır.
+@_cdecl("hs_placements_list")
+public func hs_placements_list(_ key: UnsafePointer<CChar>?, _ limit: Int32, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let placementKey = hsuString(key) ?? ""
+    hsuInbox(requestId, callback) {
+        let messages = try await Pushizo.Placements.list(placementKey, limit: Int(limit))
+        HSUnityBridgeState.shared.cachePlacementMessages(messages)
+        return hsuJsonString(["messages": messages.map { ["id": $0.id, "json": hsuJsonString($0.raw)] }])
+    }
+}
+
+/// Yerleşim olayını bildirir. event: impression | click | dismiss; buttonId yalnızca click için. Mesaj önbellekte yoksa
+/// (`hs_placements_list` ile dönmedi ya da sınır aşılıp düştü) çağrı yok sayılır.
+@_cdecl("hs_placements_report")
+public func hs_placements_report(_ messageId: UnsafePointer<CChar>?, _ event: UnsafePointer<CChar>?, _ buttonId: UnsafePointer<CChar>?) {
+    guard let id = hsuString(messageId), let message = HSUnityBridgeState.shared.placementMessage(id) else { return }
+    switch hsuString(event) {
+    case "impression":
+        Pushizo.Placements.reportImpression(message)
+    case "click":
+        guard let button = hsuNonEmpty(buttonId) else { return }
+        Pushizo.Placements.reportClick(message, buttonId: button)
+    case "dismiss":
+        Pushizo.Placements.reportDismiss(message)
+    default:
+        break
     }
 }
