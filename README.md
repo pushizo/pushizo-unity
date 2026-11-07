@@ -15,7 +15,7 @@
 
 ```json
 // Packages/manifest.json
-"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.1.0"
+"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.2.0"
 ```
 
 The detailed guide below is in Turkish; code samples are language-neutral. Full documentation:
@@ -35,7 +35,7 @@ eski sağlayıcı v5 ile uyumlu, Flutter eklentisi ve .NET MAUI SDK'sıyla aynı
 |----------|----------|
 | Android cihaz (minSdk 23) | Yerel Android SDK'sı; Java köprüsü `Runtime/Plugins/Android` |
 | iOS cihaz (iOS 15+) | Yerel iOS SDK'sı; Swift köprüsü `Runtime/Plugins/iOS` (`[DllImport("__Internal")]`) |
-| Unity Editor, Standalone, WebGL | Ağ çağrısı ve push yok; çağrılar günlüğe yazılır, tag/trigger/e-posta ve konum tercihi bellekte tutulur, izin istekleri `false`, bildirim kutusu ve tercihler `PLATFORM_NOT_SUPPORTED` |
+| Unity Editor, Standalone, WebGL | Ağ çağrısı ve push yok; çağrılar günlüğe yazılır, tag/trigger/e-posta, konum ve bölge izleme tercihi bellekte tutulur, izin istekleri `false`, bildirim kutusu ve tercihler `PLATFORM_NOT_SUPPORTED`, özellik bayrakları varsayılan değer, yerleşimler boş liste |
 
 Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](https://github.com/googlesamples/unity-jar-resolver)
 (Android Gradle ve iOS CocoaPods bağımlılıkları için), iOS için CocoaPods.
@@ -47,7 +47,7 @@ Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](ht
 ```json
 {
   "dependencies": {
-    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.1.0"
+    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.2.0"
   }
 }
 ```
@@ -80,7 +80,7 @@ Yerel SDK'lar Maven Central/CocoaPods'a yayımlanana kadar açık depolardan kul
 - Android: `git clone https://github.com/pushizo/pushizo-android && gradle -p pushizo-android :pushizo:publishToMavenLocal`,
   ardından Unity'de Player Settings → Publishing Settings → Custom Main Gradle Template / Settings Template'te
   `mavenLocal()` deposunu ekleyin.
-- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.1.0'`
+- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.2.0'`
   (NSE hedefinde `Pushizo/Extension` aynı kaynakla).
 
 ## Kullanım
@@ -136,6 +136,10 @@ public class PushizoBootstrap : MonoBehaviour
         Pushizo.Notifications.RemoveGroupedNotifications("orders"); // Android android_group / iOS thread-id
         Pushizo.Notifications.RemoveNotification(42);               // Android tepsi kimliği; iOS'ta RemoveNotification("istek-kimligi")
         Pushizo.Debug.SetLogLevel(LogLevel.Debug);
+
+        if (Pushizo.FeatureFlags.IsEnabled("new_shop")) ShowNewShop();        // özellik bayrağı (cihazdaki son değer)
+        var banners = await Pushizo.Placements.ListAsync("home.banner");      // gömülü yerleşim içeriği
+        Pushizo.Location.SetGeofencingEnabled(true);                          // arka plan bölge izleme (izin uygulamada)
     }
 }
 ```
@@ -288,6 +292,70 @@ Pushizo.Location.SetShared(false);      // sunucudaki konum ve rıza kaydı sili
   gönderilmez. `SetShared(false)` konumu ve rıza kaydını sunucudan sildirir, gönderilmemiş konumu atar.
 - **Editor, Standalone, WebGL:** konum okunmaz ve ağ çağrısı yapılmaz; `SetShared` tercihi yalnızca bellekte tutar
   (`IsShared` onu döndürür), `RequestPermissionAsync` her zaman `false` döner.
+
+#### Arka plan bölge izleme
+
+Varsayılan kapalıdır (ADR-0065). Açıkken izlemeyi işletim sistemi yapar (iOS `CLCircularRegion`, Android
+`GeofencingClient`); sunucuya koordinat gitmez, yalnızca bölgeye giriş/çıkış bildirilir. Üç koşul birlikte gerekir:
+`SetGeofencingEnabled(true)`, `SetShared(true)` ve kullanıcının verdiği arka plan konum izni.
+
+```csharp
+Pushizo.Location.SetGeofencingEnabled(true);   // kalıcı tercih; izin istemez
+Debug.Log(Pushizo.Location.IsGeofencingEnabled);
+Pushizo.Location.SetGeofencingEnabled(false);  // kayıtlı bölgeler kaldırılır
+```
+
+- Paket izin istemez, manifest'e veya Info.plist'e izin eklemez; mağaza beyanları ve aydınlatma metni uygulamanındır.
+- **iOS:** Info.plist'e `NSLocationAlwaysAndWhenInUseUsageDescription` ekleyin ve "her zaman" iznini uygulamanız istesin
+  (önce "kullanırken" izni verilmiş olmalı). İzin yoksa izleme başlamaz; 100 metrenin altındaki bölgeler güvenilir değildir.
+- **Android:** manifest'e `ACCESS_BACKGROUND_LOCATION` ekleyip izni uygulamanız istesin (Android 11+ sistem Ayarlar
+  ekranını açar); uygulamanın Gradle bağımlılıklarına `com.google.android.gms:play-services-location` ekleyin. Sınıf yoksa
+  (HMS cihazları, bağımlılığı eklemeyen uygulama) `SetGeofencingEnabled(true)` uyarı günlüğü yazar ve izleme başlamaz; ön
+  plan konumu çalışmaya devam eder.
+- `SetShared(false)`, `SetGeofencingEnabled(false)` ve gizlilik onayının geri alınması kayıtlı bölgeleri kaldırır.
+- **Editor, Standalone, WebGL:** tercih yalnızca bellekte tutulur; bölge kaydedilmez.
+
+### Özellik bayrakları
+
+Bayrak değerleri yerel SDK'da oturum başında yenilenir ve cihazda saklanır (ADR-0066); okumalar eşzamanlıdır, ağ
+çağrısı yapmaz. Değerler tag, alias ve segment kurallarına göre sunucuda çözülür; kullanıcı değişince (login/logout)
+yerel SDK yeniler.
+
+```csharp
+bool refreshed = await Pushizo.FeatureFlags.RefreshAsync();            // hemen yenile; false: istek atlandı/başarısız, eski değerler korunur
+if (Pushizo.FeatureFlags.IsEnabled("new_shop")) ShowNewShop();         // değer yoksa false (ikinci parametre varsayılan)
+var theme = Pushizo.FeatureFlags.GetValue("theme", "light") as string; // metin, long, double, bool, Dictionary<string, object?> veya List<object?>
+var columns = (long)Pushizo.FeatureFlags.GetValue("grid_columns", 2L)!;
+```
+
+- `IsEnabled`/`GetValue` `Initialize` öncesinde de güvenlidir (varsayılanı döndürür); boş anahtar köprüye gitmez.
+- `RefreshAsync` gizlilik onayı beklenirken veya ağ hatasında `false` döner, son değerler korunur. Sonuç ana iş parçacığında.
+- Editor ve yerel SDK'sı olmayan platformlarda değer yoktur: okumalar varsayılanı, `RefreshAsync` `false` döndürür.
+
+### Gömülü yerleşimler
+
+Yerleşim (ADR-0068), oyunun ayırdığı bir alana (ana ekran afişi, mağaza kartı…) dashboard'dan yönetilen içerik getirir.
+Yerel SDK modeli döndürür, çizim oyunundur: `InAppMessage.Json` sunucudaki ham mesajdır (`display` bloğu metin,
+görsel ve düğmeleri taşır). İçerik ekrana gelince `ReportImpression`, düğmeye tıklanınca `ReportClick`, kapatılınca
+`ReportDismiss` çağrılır; olaylar yerel SDK'nın çevrimdışı kuyruğundan gider ve A/B varyantı yerel tarafta eklenir.
+
+```csharp
+var messages = await Pushizo.Placements.ListAsync("home.banner", limit: 3); // anahtar ^[a-z][a-z0-9_.-]{0,63}$, limit 1-10
+foreach (var message in messages)
+{
+    var banner = RenderBanner(message.Json);          // kendi çiziminiz
+    Pushizo.Placements.ReportImpression(message);
+    banner.Clicked += buttonId => Pushizo.Placements.ReportClick(message, buttonId);
+    banner.Closed += () => Pushizo.Placements.ReportDismiss(message);
+}
+```
+
+- Geçersiz anahtar `ArgumentException`, geçersiz `limit` `ArgumentOutOfRangeException` fırlatır (köprüye gitmeden).
+- Abonelik yoksa veya gizlilik onayı bekleniyorsa liste boştur. Android'de sunucu hatası da boş liste döndürür; iOS'ta
+  sunucu hata kodu `PushizoException.Code` ile gelir (yerel SDK davranışı).
+- Rapor çağrıları yerel tarafta mesaj nesnesini ister: köprü, `ListAsync` ile dönen son mesajları kimliğe göre tutar
+  (en çok 50). Listeden gelmeyen ya da sınır aşılıp düşen bir mesajın raporu sessizce yok sayılır (Android'de debug günlüğü).
+- Editor'de liste boştur, raporlar yalnızca günlüğe yazılır.
 
 ## Mimari
 

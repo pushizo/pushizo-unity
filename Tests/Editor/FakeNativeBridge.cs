@@ -181,6 +181,57 @@ namespace PushizoSdk.Tests
             Record("requestLocationPermission:" + (rationale ?? "<null>"));
             completion(LocationPermissionResult);
         }
+
+        /// <summary>Yerel SDK'nın kalıcı bölge izleme tercihi.</summary>
+        public bool GeofencingEnabledValue { get; set; }
+
+        public bool GetGeofencingEnabled() => GeofencingEnabledValue;
+
+        public void SetGeofencingEnabled(bool enabled)
+        {
+            GeofencingEnabledValue = enabled;
+            Record("geofencingEnabled:" + enabled);
+        }
+
+        /// <summary>Bayrak yenileme sonucu.</summary>
+        public bool FeatureFlagsRefreshResult { get; set; } = true;
+
+        /// <summary>Bayrak değerleri (anahtar → <c>isEnabled</c> sonucu).</summary>
+        public Dictionary<string, bool> FeatureFlagEnabled { get; } = new Dictionary<string, bool>();
+
+        /// <summary>Bayrak değerleri (anahtar → <c>{"value":…}</c> JSON'u).</summary>
+        public Dictionary<string, string?> FeatureFlagValues { get; } = new Dictionary<string, string?>();
+
+        public void FeatureFlagsRefresh(Action<bool> completion)
+        {
+            Record("featureFlagsRefresh");
+            completion(FeatureFlagsRefreshResult);
+        }
+
+        public bool FeatureFlagIsEnabled(string key, bool defaultValue)
+        {
+            Record("featureFlagIsEnabled:" + key + ":" + defaultValue);
+            return FeatureFlagEnabled.TryGetValue(key, out var enabled) ? enabled : defaultValue;
+        }
+
+        public string? FeatureFlagValue(string key)
+        {
+            Record("featureFlagValue:" + key);
+            return FeatureFlagValues.TryGetValue(key, out var json) ? json : null;
+        }
+
+        /// <summary>Yerleşim yanıtı (<c>{"messages":[…]}</c>) ve hata kodu.</summary>
+        public string? PlacementsJson { get; set; } = @"{""messages"":[]}";
+        public string? PlacementsErrorCode { get; set; }
+
+        public void PlacementsList(string key, int limit, NativeResult result)
+        {
+            Record("placementsList:" + key + ":" + limit);
+            result(PlacementsErrorCode == null ? PlacementsJson : null, PlacementsErrorCode, PlacementsErrorCode);
+        }
+
+        public void PlacementsReport(string messageId, string eventName, string? buttonId) =>
+            Record("placementsReport:" + messageId + ":" + eventName + ":" + (buttonId ?? "<null>"));
     }
 
     /// <summary>Testlerde olaylar çağıran iş parçacığında hemen çalışır.</summary>

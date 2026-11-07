@@ -7,8 +7,10 @@ namespace PushizoSdk.Internal
     /// <summary>
     /// Unity Editor ve yerel SDK'sı olmayan platformlar (Standalone, WebGL…) için köprü: ağ çağrısı ve push yoktur.
     /// Çağrılar günlüğe yazılır (değerler değil, yalnızca işlem adı); tag, trigger, e-posta/SMS ve kimlik bellekte
-    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin; konum paylaşım tercihi de bellekte tutulur. Bildirim ve konum izni
-    /// istekleri false, bildirim kutusu, tercihler ve Live Activities <see cref="PushizoException.PlatformNotSupported"/> döndürür.
+    /// tutulur ki oyun kodu Editor'de akışı deneyebilsin; konum paylaşım ve bölge izleme tercihleri de bellekte tutulur.
+    /// Bildirim ve konum izni istekleri false, bildirim kutusu, tercihler ve Live Activities
+    /// <see cref="PushizoException.PlatformNotSupported"/> döndürür. Özellik bayrakları varsayılan değerleri verir, gömülü
+    /// yerleşimler boş liste döner (yerel SDK'nın abonelik yokken davranışı).
     /// </summary>
     internal sealed class EditorNativeBridge : INativeBridge
     {
@@ -20,6 +22,7 @@ namespace PushizoSdk.Internal
         private string? _externalId;
         private bool _paused;
         private bool _locationShared;
+        private bool _geofencingEnabled;
 
         public bool IsNative => false;
 
@@ -264,5 +267,36 @@ namespace PushizoSdk.Internal
             Log("Location.RequestPermission");
             completion(false);
         }
+
+        /// <summary>Bölge izleme tercihi yalnızca bellekte tutulur; bölge kaydedilmez.</summary>
+        public bool GetGeofencingEnabled()
+        {
+            lock (_gate) return _geofencingEnabled;
+        }
+
+        public void SetGeofencingEnabled(bool enabled)
+        {
+            lock (_gate) _geofencingEnabled = enabled;
+            Log("Location.SetGeofencingEnabled");
+        }
+
+        /// <summary>Editor'de bayrak değeri yoktur; yenileme false, okumalar varsayılan değeri verir.</summary>
+        public void FeatureFlagsRefresh(Action<bool> completion)
+        {
+            Log("FeatureFlags.Refresh");
+            completion(false);
+        }
+
+        public bool FeatureFlagIsEnabled(string key, bool defaultValue) => defaultValue;
+
+        public string? FeatureFlagValue(string key) => null;
+
+        public void PlacementsList(string key, int limit, NativeResult result)
+        {
+            Log("Placements.List");
+            result(@"{""messages"":[]}", null, null);
+        }
+
+        public void PlacementsReport(string messageId, string eventName, string? buttonId) => Log("Placements.Report");
     }
 }

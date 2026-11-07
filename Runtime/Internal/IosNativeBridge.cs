@@ -85,6 +85,13 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern int hs_location_is_shared();
         [DllImport("__Internal")] private static extern void hs_location_set_shared(int shared);
         [DllImport("__Internal")] private static extern void hs_location_request_permission(byte[]? rationale, int requestId, PermissionCallback callback);
+        [DllImport("__Internal")] private static extern int hs_location_is_geofencing_enabled();
+        [DllImport("__Internal")] private static extern void hs_location_set_geofencing_enabled(int enabled);
+        [DllImport("__Internal")] private static extern void hs_feature_flags_refresh(int requestId, PermissionCallback callback);
+        [DllImport("__Internal")] private static extern int hs_feature_flags_is_enabled(byte[] key, int defaultValue);
+        [DllImport("__Internal")] private static extern IntPtr hs_feature_flags_value(byte[] key);
+        [DllImport("__Internal")] private static extern void hs_placements_list(byte[] key, int limit, int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_placements_report(byte[] messageId, byte[] eventName, byte[]? buttonId);
 
         private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value + "\0");
 
@@ -254,6 +261,23 @@ namespace PushizoSdk.Internal
 
         public void RequestLocationPermission(string? rationale, Action<bool> completion) =>
             hs_location_request_permission(Utf8OrNull(rationale), Register(s_permissions, completion), s_permissionCallback);
+
+        public bool GetGeofencingEnabled() => hs_location_is_geofencing_enabled() != 0;
+
+        public void SetGeofencingEnabled(bool enabled) => hs_location_set_geofencing_enabled(enabled ? 1 : 0);
+
+        public void FeatureFlagsRefresh(Action<bool> completion) =>
+            hs_feature_flags_refresh(Register(s_permissions, completion), s_permissionCallback);
+
+        public bool FeatureFlagIsEnabled(string key, bool defaultValue) => hs_feature_flags_is_enabled(Utf8(key), defaultValue ? 1 : 0) != 0;
+
+        public string? FeatureFlagValue(string key) => Take(hs_feature_flags_value(Utf8(key)));
+
+        public void PlacementsList(string key, int limit, NativeResult result) =>
+            hs_placements_list(Utf8(key), limit, Register(s_results, result), s_resultCallback);
+
+        public void PlacementsReport(string messageId, string eventName, string? buttonId) =>
+            hs_placements_report(Utf8(messageId), Utf8(eventName), Utf8OrNull(buttonId));
     }
 }
 #endif

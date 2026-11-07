@@ -31,7 +31,13 @@ namespace PushizoSdk.Tests
             var exports = Matches(PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift"), @"@_cdecl\(""(hs_\w+)""\)");
 
             CollectionAssert.IsNotEmpty(imports);
-            CollectionAssert.IsSubsetOf(new[] { "hs_location_is_shared", "hs_location_set_shared", "hs_location_request_permission" }, imports);
+            CollectionAssert.IsSubsetOf(new[]
+            {
+                "hs_location_is_shared", "hs_location_set_shared", "hs_location_request_permission",
+                "hs_location_is_geofencing_enabled", "hs_location_set_geofencing_enabled",
+                "hs_feature_flags_refresh", "hs_feature_flags_is_enabled", "hs_feature_flags_value",
+                "hs_placements_list", "hs_placements_report",
+            }, imports);
             CollectionAssert.IsEmpty(imports.Except(exports), "Swift köprüsünde @_cdecl karşılığı olmayan DllImport");
         }
 
@@ -42,7 +48,13 @@ namespace PushizoSdk.Tests
             var methods = Matches(PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java"), @"public\s+static\s+[\w<>\[\]]+\s+(\w+)\s*\(");
 
             CollectionAssert.IsNotEmpty(calls);
-            CollectionAssert.IsSubsetOf(new[] { "locationShared", "setLocationShared", "requestLocationPermission" }, calls);
+            CollectionAssert.IsSubsetOf(new[]
+            {
+                "locationShared", "setLocationShared", "requestLocationPermission",
+                "geofencingEnabled", "setGeofencingEnabled",
+                "featureFlagsRefresh", "featureFlagIsEnabled", "featureFlagValue",
+                "placementsList", "placementsReport",
+            }, calls);
             CollectionAssert.IsEmpty(calls.Except(methods), "Java köprüsünde public static karşılığı olmayan çağrı");
         }
     }

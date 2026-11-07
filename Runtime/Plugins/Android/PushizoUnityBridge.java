@@ -30,6 +30,7 @@ import com.pushizo.sdk.PushizoChat;
 import com.pushizo.sdk.HsForegroundEvent;
 import com.pushizo.sdk.HsInAppLifecycleEvent;
 import com.pushizo.sdk.HsInAppLifecycleListener;
+import com.pushizo.sdk.HsInAppMessage;
 import com.pushizo.sdk.HsInboxItem;
 import com.pushizo.sdk.HsInboxPage;
 import com.pushizo.sdk.HsLog;
@@ -68,6 +69,7 @@ import kotlin.coroutines.intrinsics.IntrinsicsKt;
  */
 public final class PushizoUnityBridge {
     private static final int MAX_PENDING_FOREGROUND = 32;
+    private static final int MAX_CACHED_PLACEMENT_MESSAGES = 50;
     /** İzin iletişim kutusu açılmazsa (kalıcı ret) sonucun bildirileceği süre. */
     private static final long PERMISSION_NO_DIALOG_TIMEOUT_MS = 1000;
 
@@ -83,6 +85,14 @@ public final class PushizoUnityBridge {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, HsForegroundEvent> eldest) {
             return size() > MAX_PENDING_FOREGROUND;
+        }
+    };
+
+    /** Son placementsList çağrılarından dönen mesajlar (kimlik → mesaj); olay bildirimleri yerel modeli buradan bulur. */
+    private static final Map<String, HsInAppMessage> PLACEMENT_MESSAGES = new LinkedHashMap<String, HsInAppMessage>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, HsInAppMessage> eldest) {
+            return size() > MAX_CACHED_PLACEMENT_MESSAGES;
         }
     };
 
@@ -507,6 +517,95 @@ public final class PushizoUnityBridge {
             HsLog.INSTANCE.w("uygulama izinleri okunamadı", e);
         }
         return result.toArray(new String[0]);
+    }
+
+    // --- Bölge izleme (ADR-0065) ---
+
+    /** Arka plan bölge izleme açık mı (yerel SDK'nın kalıcı tercihi; varsayılan kapalı). */
+    public static boolean geofencingEnabled() { return Pushizo.Location.isGeofencingEnabled(); }
+
+    /**
+     * Bölge izlemeyi açar/kapatır. Köprü izin istemez ve manifest'e izin eklemez: paylaşım (setLocationShared), arka plan
+     * konum izni ve play-services-location bağımlılığı uygulamadadır; eksikse yerel SDK izlemeyi başlatmaz.
+     */
+    public static void setGeofencingEnabled(boolean enabled) { Pushizo.Location.setGeofencingEnabled(enabled); }
+
+    // --- Özellik bayrakları (ADR-0066) ---
+
+    /** Değerleri hemen yeniler; sonuç (arka plan iş parçacığında) değerlerin güncellenip güncellenmediğidir. */
+    public static void featureFlagsRefresh(PushizoUnityPermissionCallback callback) {
+        Pushizo.FeatureFlags.refresh(refreshed -> {
+            callback.onResult(refreshed);
+            return Unit.INSTANCE;
+        });
+    }
+
+    public static boolean featureFlagIsEnabled(String key, boolean defaultValue) {
+        return Pushizo.FeatureFlags.isEnabled(key, defaultValue);
+    }
+
+    /** Bayrağın değeri {"value":…} olarak (metin, sayı, mantıksal, nesne veya dizi); değer yoksa null. */
+    public static String featureFlagValue(String key) {
+        Object value = Pushizo.FeatureFlags.getValue(key);
+        return value == null ? null : object("value", value).toString();
+    }
+
+    // --- Gömülü yerleşimler (ADR-0068) ---
+
+    /**
+     * Başarı JSON'u: {"messages":[{"id","json"}]} (json: sunucudaki ham mesaj). Anahtar ve limit doğrulaması yerel
+     * SDK'dadır (geçersizse INVALID_ARGUMENT); abonelik yoksa veya istek başarısızsa liste boştur. Dönen mesajlar
+     * placementsReport için önbelleğe alınır. Geri çağrı arka plan iş parçacığında gelebilir.
+     */
+    public static void placementsList(String key, int limit, PushizoUnityCallback callback) {
+        try {
+            Pushizo.Placements.list(key, limit, messages -> {
+                JSONArray items = new JSONArray();
+                synchronized (PLACEMENT_MESSAGES) {
+                    for (HsInAppMessage message : messages) {
+                        // Yeniden gelen mesaj sona alınır; en eski kayıtlar sınır aşılınca düşer.
+                        PLACEMENT_MESSAGES.remove(message.getId());
+                        PLACEMENT_MESSAGES.put(message.getId(), message);
+                        items.put(object("id", message.getId(), "json", message.toJson()));
+                    }
+                }
+                JSONObject payload = new JSONObject();
+                put(payload, "messages", items);
+                callback.onResult(payload.toString(), null, null);
+                return Unit.INSTANCE;
+            });
+        } catch (IllegalArgumentException e) {
+            callback.onResult(null, "INVALID_ARGUMENT", e.getMessage());
+        }
+    }
+
+    /**
+     * Yerleşim olayını bildirir. event: impression | click | dismiss; buttonId yalnızca click için. Mesaj önbellekte
+     * yoksa (placementsList ile dönmedi ya da sınır aşılıp düştü) çağrı yok sayılır.
+     */
+    public static void placementsReport(String messageId, String event, String buttonId) {
+        HsInAppMessage message;
+        synchronized (PLACEMENT_MESSAGES) {
+            message = PLACEMENT_MESSAGES.get(messageId);
+        }
+        if (message == null) {
+            HsLog.INSTANCE.d("yerleşim olayı yok sayıldı: mesaj önbellekte yok");
+            return;
+        }
+        switch (event) {
+            case "impression":
+                Pushizo.Placements.reportImpression(message);
+                break;
+            case "click":
+                String button = emptyToNull(buttonId);
+                if (button != null) Pushizo.Placements.reportClick(message, button);
+                break;
+            case "dismiss":
+                Pushizo.Placements.reportDismiss(message);
+                break;
+            default:
+                HsLog.INSTANCE.d("bilinmeyen yerleşim olayı yok sayıldı: " + event);
+        }
     }
 
     // --- Ön plan ---

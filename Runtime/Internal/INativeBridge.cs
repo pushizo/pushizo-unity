@@ -124,5 +124,36 @@ namespace PushizoSdk.Internal
         /// metni). Sonuç: izin var/verildi mi; herhangi bir iş parçacığından gelebilir.
         /// </summary>
         void RequestLocationPermission(string? rationale, Action<bool> completion);
+
+        /// <summary>Arka plan bölge izleme açık mı (ADR-0065; yerel SDK'nın kalıcı tercihi, varsayılan kapalı).</summary>
+        bool GetGeofencingEnabled();
+
+        /// <summary>Bölge izlemeyi açar/kapatır. Köprü izin istemez; arka plan izni ve platform tanımları uygulamanındır.</summary>
+        void SetGeofencingEnabled(bool enabled);
+
+        /// <summary>
+        /// Özellik bayraklarını hemen yeniler (ADR-0066). Sonuç: değerler güncellendi mi; herhangi bir iş parçacığından
+        /// gelebilir.
+        /// </summary>
+        void FeatureFlagsRefresh(Action<bool> completion);
+
+        /// <summary>Bayrak açık mı (cihazdaki son değerler); değer yoksa <paramref name="defaultValue"/>.</summary>
+        bool FeatureFlagIsEnabled(string key, bool defaultValue);
+
+        /// <summary>Bayrağın değeri <c>{"value":…}</c> olarak (metin, sayı, bool, nesne veya dizi); değer yoksa null.</summary>
+        string? FeatureFlagValue(string key);
+
+        /// <summary>
+        /// Gömülü yerleşimin içeriği (ADR-0068). Başarı JSON'u: <c>{"messages":[{"id","json"}]}</c> (<c>json</c>: sunucudaki
+        /// ham mesaj JSON'u metin olarak). Yerel köprü dönen mesajları kimliğe göre sınırlı bir önbellekte tutar
+        /// (<see cref="PlacementsReport"/> için).
+        /// </summary>
+        void PlacementsList(string key, int limit, NativeResult result);
+
+        /// <summary>
+        /// Yerleşim olayını bildirir. <paramref name="eventName"/>: <c>impression</c> | <c>click</c> | <c>dismiss</c>;
+        /// <paramref name="buttonId"/> yalnızca <c>click</c> için. Mesaj yerel önbellekte yoksa çağrı yok sayılır.
+        /// </summary>
+        void PlacementsReport(string messageId, string eventName, string? buttonId);
     }
 }

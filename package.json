@@ -1,6 +1,6 @@
 {
   "name": "com.pushizo.unity",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Pushizo",
   "description": "Pushizo Unity SDK: push bildirimleri, in-app mesajlar, bildirim kutusu, kullanıcı/tag/alias, e-posta ve SMS abonelikleri. Yerel Pushizo Android ve iOS SDK'larını sarar.",
   "unity": "2021.3",

@@ -20,7 +20,7 @@ namespace PushizoSdk
     public static class Pushizo
     {
         /// <summary>Bu C# katmanının sürümü.</summary>
-        public const string SdkVersion = "0.1.0";
+        public const string SdkVersion = "0.2.0";
 
         private static readonly object s_gate = new object();
         private static INativeBridge? s_bridge;
@@ -43,6 +43,10 @@ namespace PushizoSdk
         public static SessionManager Session { get; } = new SessionManager();
         public static LiveActivitiesManager LiveActivities { get; } = new LiveActivitiesManager();
         public static LocationManager Location { get; } = new LocationManager();
+        /// <summary>Özellik bayrakları (ADR-0066).</summary>
+        public static FeatureFlagsManager FeatureFlags { get; } = new FeatureFlagsManager();
+        /// <summary>Gömülü yerleşimler (ADR-0068).</summary>
+        public static PlacementsManager Placements { get; } = new PlacementsManager();
         public static DebugManager Debug { get; } = new DebugManager();
 
         /// <summary>
@@ -163,7 +167,7 @@ namespace PushizoSdk
         internal static Task<bool> RequestPermission(bool fallbackToSettings) =>
             CallBool((bridge, done) => bridge.RequestPermission(fallbackToSettings, done));
 
-        /// <summary>Yerel bool sonucunu (izin istekleri) ana iş parçacığında tamamlanan Task'a çevirir.</summary>
+        /// <summary>Yerel bool sonucunu (izin istekleri, bayrak yenileme) ana iş parçacığında tamamlanan Task'a çevirir.</summary>
         internal static Task<bool> CallBool(Action<INativeBridge, Action<bool>> invoke)
         {
             var bridge = Bridge();
