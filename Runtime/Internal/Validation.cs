@@ -118,6 +118,11 @@ namespace PushizoSdk.Internal
             if (limit < 1 || limit > 200) throw new ArgumentOutOfRangeException(paramName, limit, "limit 1-200 olmalı.");
         }
 
+        public static void RequireContentCardLimit(int limit, string paramName)
+        {
+            if (limit < 1 || limit > 100) throw new ArgumentOutOfRangeException(paramName, limit, "limit 1-100 olmalı.");
+        }
+
         // \z: .NET'te $ sondaki satır sonunu da kabul eder.
         private static readonly Regex PlacementKeyRegex = new Regex(@"^[a-z][a-z0-9_.-]{0,63}\z", RegexOptions.CultureInvariant);
 

@@ -74,6 +74,23 @@ namespace PushizoSdk.Internal
 
         public static InboxItem ParseInboxItem(string json) => ReadInboxItem(Object(json));
 
+        public static ContentCardFeed ParseContentCardFeed(string json)
+        {
+            var root = Object(json);
+            var cards = new List<ContentCard>();
+            if (root.TryGetValue("cards", out var arr) && arr is List<object?> list)
+            {
+                foreach (var element in list)
+                {
+                    if (element is Dictionary<string, object?> map) cards.Add(ReadContentCard(map));
+                }
+            }
+            var unviewed = root.TryGetValue("unviewedCount", out var u) && u is long count ? (int)count : cards.Count(c => !c.Viewed);
+            return new ContentCardFeed(cards, unviewed);
+        }
+
+        public static ContentCard ParseContentCard(string json) => ReadContentCard(Object(json));
+
         /// <summary><c>{"unreadCount":n}</c>.</summary>
         public static int ParseUnreadCount(string json)
         {
@@ -218,6 +235,23 @@ namespace PushizoSdk.Internal
                     ? (int)l
                     : (int?)null);
         }
+
+        private static ContentCard ReadContentCard(Dictionary<string, object?> e) => new ContentCard(
+            Str(e, "id") ?? throw Invalid("id"),
+            Str(e, "messageId"),
+            ContentCard.ParseType(Str(e, "type")),
+            Str(e, "title"),
+            Str(e, "body"),
+            Str(e, "url"),
+            Str(e, "imageUrl"),
+            Str(e, "buttonText"),
+            e.TryGetValue("data", out var data) && data is Dictionary<string, object?> d ? ReadStringMap(d) : new Dictionary<string, string>(),
+            Bool(e, "pinned"),
+            e.TryGetValue("priority", out var p) && p is long priority ? (int)priority : 0,
+            Bool(e, "viewed"),
+            Bool(e, "clicked"),
+            Millis(e, "expiresAt"),
+            Millis(e, "createdAt"));
 
         private static InboxItem ReadInboxItem(Dictionary<string, object?> e) => new InboxItem(
             Str(e, "id") ?? throw Invalid("id"),

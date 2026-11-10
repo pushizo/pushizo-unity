@@ -200,6 +200,26 @@ private func hsuItemJson(_ item: HSInboxItem) -> [String: Any] {
     ]
 }
 
+private func hsuCardJson(_ card: HSContentCard) -> [String: Any] {
+    [
+        "id": card.id,
+        "messageId": card.messageId ?? NSNull(),
+        "type": card.type.rawValue,
+        "title": card.title ?? NSNull(),
+        "body": card.body ?? NSNull(),
+        "url": card.url ?? NSNull(),
+        "imageUrl": card.imageUrl ?? NSNull(),
+        "buttonText": card.buttonText ?? NSNull(),
+        "data": card.data,
+        "pinned": card.pinned,
+        "priority": card.priority,
+        "viewed": card.viewed,
+        "clicked": card.clicked,
+        "expiresAt": hsuMillis(card.expiresAt),
+        "createdAt": hsuMillis(card.createdAt),
+    ]
+}
+
 private func hsuPageJson(_ page: HSInboxPage) -> [String: Any] {
     [
         "items": page.items.map { hsuItemJson($0) },
@@ -683,6 +703,29 @@ public func hs_inbox_archive(_ id: UnsafePointer<CChar>?, _ requestId: Int32, _ 
     hsuInbox(requestId, callback) {
         try await Pushizo.Inbox.archive(itemId)
         return nil
+    }
+}
+
+// İçerik kartları (ADR-0082).
+@_cdecl("hs_content_cards_list")
+public func hs_content_cards_list(_ limit: Int32, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    hsuInbox(requestId, callback) {
+        let feed = try await Pushizo.ContentCards.list(limit: Int(limit))
+        return hsuJsonString(["cards": feed.cards.map { hsuCardJson($0) }, "unviewedCount": feed.unviewedCount])
+    }
+}
+
+@_cdecl("hs_content_card_event")
+public func hs_content_card_event(_ id: UnsafePointer<CChar>?, _ eventName: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let cardId = hsuString(id) ?? ""
+    let name = hsuString(eventName) ?? ""
+    hsuInbox(requestId, callback) {
+        let card: HSContentCard
+        if name == "impression" { card = try await Pushizo.ContentCards.logImpression(cardId) }
+        else if name == "click" { card = try await Pushizo.ContentCards.logClick(cardId) }
+        else if name == "dismiss" { card = try await Pushizo.ContentCards.dismiss(cardId) }
+        else { throw HSError.invalidArgument("Kart olayı impression, click veya dismiss olmalı") }
+        return hsuJsonString(hsuCardJson(card))
     }
 }
 

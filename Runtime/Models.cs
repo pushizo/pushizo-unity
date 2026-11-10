@@ -131,6 +131,77 @@ namespace PushizoSdk
         public DateTimeOffset? CreatedAt { get; }
     }
 
+    /// <summary>İçerik kartı türü (ADR-0082).</summary>
+    public enum ContentCardType
+    {
+        Classic,
+        CaptionedImage,
+        ImageOnly,
+    }
+
+    /// <summary>İçerik kartı (ADR-0082); kartlar bildirim kutusunda görünmez.</summary>
+    public sealed class ContentCard
+    {
+        internal ContentCard(
+            string id, string? messageId, ContentCardType type, string? title, string? body, string? url, string? imageUrl,
+            string? buttonText, IReadOnlyDictionary<string, string> data, bool pinned, int priority, bool viewed, bool clicked,
+            DateTimeOffset? expiresAt, DateTimeOffset? createdAt)
+        {
+            Id = id;
+            MessageId = messageId;
+            Type = type;
+            Title = title;
+            Body = body;
+            Url = url;
+            ImageUrl = imageUrl;
+            ButtonText = buttonText;
+            Data = data;
+            Pinned = pinned;
+            Priority = priority;
+            Viewed = viewed;
+            Clicked = clicked;
+            ExpiresAt = expiresAt;
+            CreatedAt = createdAt;
+        }
+
+        public string Id { get; }
+        public string? MessageId { get; }
+        public ContentCardType Type { get; }
+        public string? Title { get; }
+        public string? Body { get; }
+        public string? Url { get; }
+        public string? ImageUrl { get; }
+        public string? ButtonText { get; }
+        public IReadOnlyDictionary<string, string> Data { get; }
+        public bool Pinned { get; }
+        public int Priority { get; }
+        public bool Viewed { get; }
+        public bool Clicked { get; }
+        public DateTimeOffset? ExpiresAt { get; }
+        public DateTimeOffset? CreatedAt { get; }
+
+        /// <summary>Tel değeri (<c>classic</c>, <c>captioned_image</c>, <c>image_only</c>); bilinmeyen değer klasik sayılır.</summary>
+        internal static ContentCardType ParseType(string? wire) => wire switch
+        {
+            "captioned_image" => ContentCardType.CaptionedImage,
+            "image_only" => ContentCardType.ImageOnly,
+            _ => ContentCardType.Classic,
+        };
+    }
+
+    /// <summary>Kart akışı (sabitlenmiş → öncelik → yeni) ve görülmemiş kart sayısı.</summary>
+    public sealed class ContentCardFeed
+    {
+        internal ContentCardFeed(IReadOnlyList<ContentCard> cards, int unviewedCount)
+        {
+            Cards = cards;
+            UnviewedCount = unviewedCount;
+        }
+
+        public IReadOnlyList<ContentCard> Cards { get; }
+        public int UnviewedCount { get; }
+    }
+
     /// <summary>Bildirim kutusu sayfası (yeniden eskiye).</summary>
     public sealed class InboxPage
     {

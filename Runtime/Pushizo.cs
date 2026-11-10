@@ -38,6 +38,8 @@ namespace PushizoSdk
         public static NotificationsManager Notifications { get; } = new NotificationsManager();
         public static InAppMessagesManager InAppMessages { get; } = new InAppMessagesManager();
         public static InboxManager Inbox { get; } = new InboxManager();
+        /// <summary>İçerik kartları (ADR-0082; Android ve iOS cihaz derlemeleri).</summary>
+        public static ContentCardsManager ContentCards { get; } = new ContentCardsManager();
         /// <summary>Canlı sohbet (ADR-0040; Android ve iOS cihaz derlemeleri).</summary>
         public static ChatManager Chat { get; } = new ChatManager();
         public static SessionManager Session { get; } = new SessionManager();

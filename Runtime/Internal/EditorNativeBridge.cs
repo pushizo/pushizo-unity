@@ -222,6 +222,10 @@ namespace PushizoSdk.Internal
 
         public void InboxUnreadCount(NativeResult result) => NotSupported(result);
 
+        public void ContentCardsList(int limit, NativeResult result) => NotSupported(result);
+
+        public void ContentCardEvent(string id, string eventName, NativeResult result) => NotSupported(result);
+
         public void ChatCall(string method, string argsJson, NativeResult result) => NotSupported(result, "Canlı sohbet");
 
         public void GetPreferences(NativeResult result)

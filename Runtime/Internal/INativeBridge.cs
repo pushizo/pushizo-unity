@@ -74,6 +74,12 @@ namespace PushizoSdk.Internal
         void InboxArchive(string id, NativeResult result);
         void InboxUnreadCount(NativeResult result);
 
+        /// <summary>İçerik kartları (ADR-0082): <c>{"cards":[…],"unviewedCount":n}</c>.</summary>
+        void ContentCardsList(int limit, NativeResult result);
+
+        /// <summary>Kart olayı: <c>impression</c>, <c>click</c> veya <c>dismiss</c>; güncel kartı döndürür.</summary>
+        void ContentCardEvent(string id, string eventName, NativeResult result);
+
         /// <summary>
         /// Canlı sohbet çağrısı (ADR-0040). <paramref name="method"/>: start, getConfig, getConversation, getMessages,
         /// sendMessage, sendAttachment (base64), markRead, refreshUnreadCount, getUnreadCount, leaveOfflineMessage, setTyping,

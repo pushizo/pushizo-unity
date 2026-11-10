@@ -31,6 +31,8 @@ import com.pushizo.sdk.HsForegroundEvent;
 import com.pushizo.sdk.HsInAppLifecycleEvent;
 import com.pushizo.sdk.HsInAppLifecycleListener;
 import com.pushizo.sdk.HsInAppMessage;
+import com.pushizo.sdk.HsContentCard;
+import com.pushizo.sdk.HsContentCardFeed;
 import com.pushizo.sdk.HsInboxItem;
 import com.pushizo.sdk.HsInboxPage;
 import com.pushizo.sdk.HsLog;
@@ -678,6 +680,22 @@ public final class PushizoUnityBridge {
         c.run(() -> Pushizo.Inbox.INSTANCE.unreadCount(c));
     }
 
+    // --- İçerik kartları (ADR-0082; Kotlin suspend fonksiyonları Continuation ile) ---
+
+    public static void contentCardsList(int limit, PushizoUnityCallback callback) {
+        InboxContinuation c = new InboxContinuation(callback, value -> cardFeedJson((HsContentCardFeed) value).toString());
+        c.run(() -> Pushizo.ContentCards.INSTANCE.list(limit, c));
+    }
+
+    /** eventName: impression | click | dismiss; başka değer INVALID_ARGUMENT. */
+    public static void contentCardEvent(String id, String eventName, PushizoUnityCallback callback) {
+        InboxContinuation c = new InboxContinuation(callback, value -> cardJson((HsContentCard) value).toString());
+        if ("impression".equals(eventName)) c.run(() -> Pushizo.ContentCards.INSTANCE.logImpression(id, c));
+        else if ("click".equals(eventName)) c.run(() -> Pushizo.ContentCards.INSTANCE.logClick(id, c));
+        else if ("dismiss".equals(eventName)) c.run(() -> Pushizo.ContentCards.INSTANCE.dismiss(id, c));
+        else c.run(() -> { throw new IllegalArgumentException("Kart olayı impression, click veya dismiss olmalı."); });
+    }
+
     // --- Tercihler (ADR-0019 §4; Kotlin suspend fonksiyonları Continuation ile) ---
 
     /** Başarı JSON'u: {"preferences":[…],"categories":[…]} (bkz. preferencesResultJson). */
@@ -1029,6 +1047,34 @@ public final class PushizoUnityBridge {
                 "expiresAt", i.getExpiresAt(),
                 "createdAt", i.getCreatedAt());
         put(o, "data", new JSONObject(i.getData()));
+        return o;
+    }
+
+    private static JSONObject cardJson(HsContentCard card) {
+        JSONObject o = object(
+                "id", card.getId(),
+                "messageId", card.getMessageId(),
+                "type", card.getType().getWire(),
+                "title", card.getTitle(),
+                "body", card.getBody(),
+                "url", card.getUrl(),
+                "imageUrl", card.getImageUrl(),
+                "buttonText", card.getButtonText(),
+                "pinned", card.getPinned(),
+                "priority", card.getPriority(),
+                "viewed", card.getViewed(),
+                "clicked", card.getClicked(),
+                "expiresAt", card.getExpiresAt(),
+                "createdAt", card.getCreatedAt());
+        put(o, "data", new JSONObject(card.getData()));
+        return o;
+    }
+
+    private static JSONObject cardFeedJson(HsContentCardFeed feed) {
+        JSONArray cards = new JSONArray();
+        for (HsContentCard card : feed.getCards()) cards.put(cardJson(card));
+        JSONObject o = object("unviewedCount", feed.getUnviewedCount());
+        put(o, "cards", cards);
         return o;
     }
 

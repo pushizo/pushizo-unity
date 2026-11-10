@@ -127,6 +127,8 @@ namespace PushizoSdk.Tests
         public void InboxMarkAllRead(NativeResult result) => Respond("inboxMarkAllRead", result);
         public void InboxArchive(string id, NativeResult result) => Respond("inboxArchive:" + id, result);
         public void InboxUnreadCount(NativeResult result) => Respond("inboxUnreadCount", result);
+        public void ContentCardsList(int limit, NativeResult result) => Respond("contentCardsList:" + limit, result);
+        public void ContentCardEvent(string id, string eventName, NativeResult result) => Respond("contentCardEvent:" + id + ":" + eventName, result);
 
         private void RespondPreferences(string call, NativeResult result)
         {

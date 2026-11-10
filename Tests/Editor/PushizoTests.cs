@@ -286,6 +286,37 @@ namespace PushizoSdk.Tests
         }
 
         [Test]
+        public void Content_cards_round_trip_through_bridge_json()
+        {
+            Init();
+            _bridge.InboxJson = @"{""cards"":[{""id"":""cc_1"",""type"":""captioned_image"",""title"":""Yeni"",""imageUrl"":""https://cdn/x.png"",""buttonText"":""Aç"",""pinned"":true,""priority"":50,""viewed"":false,""clicked"":false,""createdAt"":1759838400000,""data"":{""k"":""v""}},{""id"":""cc_2"",""type"":""bilinmeyen""}],""unviewedCount"":2}";
+            var feed = Pushizo.ContentCards.ListAsync(20);
+            Assert.IsTrue(feed.IsCompleted);
+            Assert.AreEqual("contentCardsList:20", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Assert.AreEqual(2, feed.Result.UnviewedCount);
+            var first = feed.Result.Cards[0];
+            Assert.AreEqual(ContentCardType.CaptionedImage, first.Type);
+            Assert.AreEqual("Aç", first.ButtonText);
+            Assert.IsTrue(first.Pinned);
+            Assert.AreEqual(50, first.Priority);
+            Assert.AreEqual("v", first.Data["k"]);
+            Assert.AreEqual(DateTimeOffset.FromUnixTimeMilliseconds(1759838400000), first.CreatedAt);
+            Assert.AreEqual(ContentCardType.Classic, feed.Result.Cards[1].Type);
+
+            _bridge.InboxJson = @"{""id"":""cc_1"",""type"":""classic"",""viewed"":true,""clicked"":true}";
+            var clicked = Pushizo.ContentCards.LogClickAsync("cc_1");
+            Assert.IsTrue(clicked.Result.Clicked);
+            Assert.AreEqual("contentCardEvent:cc_1:click", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Pushizo.ContentCards.LogImpressionAsync("cc_1").Wait();
+            Assert.AreEqual("contentCardEvent:cc_1:impression", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Pushizo.ContentCards.DismissAsync("cc_1").Wait();
+            Assert.AreEqual("contentCardEvent:cc_1:dismiss", _bridge.Calls[_bridge.Calls.Count - 1]);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => Pushizo.ContentCards.ListAsync(101));
+            Assert.Throws<ArgumentException>(() => Pushizo.ContentCards.DismissAsync(""));
+        }
+
+        [Test]
         public void Preferences_round_trip_through_bridge_json()
         {
             Init();
@@ -739,6 +770,7 @@ namespace PushizoSdk.Tests
             Assert.IsFalse(Pushizo.Notifications.RequestPermissionAsync().Result);
             var inbox = Pushizo.Inbox.ListAsync();
             Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)inbox.Exception!.InnerException!).Code);
+            Assert.AreEqual(PushizoException.PlatformNotSupported, FaultCode(Pushizo.ContentCards.ListAsync()));
             var preferences = Pushizo.User.GetPreferencesAsync();
             Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)preferences.Exception!.InnerException!).Code);
             var setPreferences = Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true) });

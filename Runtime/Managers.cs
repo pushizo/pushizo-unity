@@ -455,6 +455,44 @@ namespace PushizoSdk
             json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.");
     }
 
+    /// <summary>
+    /// İçerik kartları (<c>Pushizo.ContentCards</c>, ADR-0082): kalıcı kart akışı. Gösterimde
+    /// <see cref="LogImpressionAsync"/>, tıklamada <see cref="LogClickAsync"/>, kapatmada <see cref="DismissAsync"/>.
+    /// </summary>
+    public sealed class ContentCardsManager
+    {
+        internal ContentCardsManager()
+        {
+        }
+
+        /// <summary>Kart akışı (<paramref name="limit"/> 1-100).</summary>
+        public Task<ContentCardFeed> ListAsync(int limit = 50)
+        {
+            Validation.RequireContentCardLimit(limit, nameof(limit));
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.ContentCardsList(limit, r), json => BridgeJson.ParseContentCardFeed(Require(json)));
+        }
+
+        /// <summary>Kart ekranda gösterildi (ilk gösterim kaydedilir).</summary>
+        public Task<ContentCard> LogImpressionAsync(string id) => Event(id, "impression");
+
+        /// <summary>Karta tıklandı (gösterim de sayılır).</summary>
+        public Task<ContentCard> LogClickAsync(string id) => Event(id, "click");
+
+        /// <summary>Kart kapatıldı; akıştan kalkar.</summary>
+        public Task<ContentCard> DismissAsync(string id) => Event(id, "dismiss");
+
+        private static Task<ContentCard> Event(string id, string eventName)
+        {
+            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Kart kimliği gerekli.", nameof(id));
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.ContentCardEvent(id, eventName, r), json => BridgeJson.ParseContentCard(Require(json)));
+        }
+
+        private static string Require(string? json) =>
+            json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.");
+    }
+
     /// <summary>Oturum ve özel olaylar (<c>Pushizo.Session</c>).</summary>
     public sealed class SessionManager
     {
