@@ -37,6 +37,7 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern void hs_start(byte[] appId, byte[] optionsJson, EventCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_consent_given(int given);
         [DllImport("__Internal")] private static extern IntPtr hs_login(byte[] externalId, byte[]? identityHash, byte[]? jwt);
+        [DllImport("__Internal")] private static extern IntPtr hs_login_with_profile(byte[] externalId, byte[] profileJson, byte[]? identityHash, byte[]? jwt);
         [DllImport("__Internal")] private static extern IntPtr hs_update_user_jwt(byte[] jwt);
         [DllImport("__Internal")] private static extern void hs_logout();
         [DllImport("__Internal")] private static extern void hs_set_log_level(int level);
@@ -62,6 +63,7 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern void hs_clear_all_notifications();
         [DllImport("__Internal")] private static extern void hs_remove_notification(byte[] identifier);
         [DllImport("__Internal")] private static extern void hs_remove_grouped_notifications(byte[] group);
+        [DllImport("__Internal")] private static extern void hs_set_badge_count(int count);
         [DllImport("__Internal")] private static extern void hs_set_foreground_handler_enabled(int enabled);
         [DllImport("__Internal")] private static extern void hs_foreground_display(byte[] eventId);
         [DllImport("__Internal")] private static extern void hs_add_triggers(byte[] json);
@@ -81,12 +83,18 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern void hs_chat_call(byte[] method, byte[] argsJson, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_get_preferences(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_preferences(byte[] json, int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_set_ads_personalization_consent(int granted, int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_get_consents(int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_set_advertising_id(byte[]? id);
         [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue);
         [DllImport("__Internal")] private static extern void hs_setup_default_live_activity(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_start_default_live_activity(byte[] activityId, byte[] attributesJson, byte[] contentStateJson, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern int hs_location_is_shared();
         [DllImport("__Internal")] private static extern void hs_location_set_shared(int shared);
         [DllImport("__Internal")] private static extern void hs_location_request_permission(byte[]? rationale, int requestId, PermissionCallback callback);
+        [DllImport("__Internal")] private static extern int hs_location_permission_granted();
+        [DllImport("__Internal")] private static extern int hs_location_background_permission_granted();
+        [DllImport("__Internal")] private static extern void hs_location_request_always_permission(int requestId, PermissionCallback callback);
         [DllImport("__Internal")] private static extern int hs_location_is_geofencing_enabled();
         [DllImport("__Internal")] private static extern void hs_location_set_geofencing_enabled(int enabled);
         [DllImport("__Internal")] private static extern void hs_feature_flags_refresh(int requestId, PermissionCallback callback);
@@ -153,6 +161,9 @@ namespace PushizoSdk.Internal
         public string? Login(string externalId, string? identityHash, string? jwt) =>
             Take(hs_login(Utf8(externalId), Utf8OrNull(identityHash), Utf8OrNull(jwt)));
 
+        public string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt) =>
+            Take(hs_login_with_profile(Utf8(externalId), Utf8(profileJson), Utf8OrNull(identityHash), Utf8OrNull(jwt)));
+
         public string? UpdateUserJwt(string jwt) => Take(hs_update_user_jwt(Utf8(jwt)));
 
         public void Logout() => hs_logout();
@@ -183,6 +194,9 @@ namespace PushizoSdk.Internal
 
         public void RemoveSms(string phoneNumber) => hs_remove_sms(Utf8(phoneNumber));
 
+        /// <summary>ADM Fire OS'a özgüdür; iOS'ta yerel çağrı yapılmaz (etkisiz).</summary>
+        public string? RegisterAdm(string token) => null;
+
         public string GetEmails() => Take(hs_emails()) ?? "[]";
 
         public string GetSmsNumbers() => Take(hs_sms_numbers()) ?? "[]";
@@ -203,6 +217,8 @@ namespace PushizoSdk.Internal
         public void RemoveNotification(string id) => hs_remove_notification(Utf8(id));
 
         public void RemoveGroupedNotifications(string group) => hs_remove_grouped_notifications(Utf8(group));
+
+        public void SetBadgeCount(int count) => hs_set_badge_count(count);
 
         public void SetForegroundHandlerEnabled(bool enabled) => hs_set_foreground_handler_enabled(enabled ? 1 : 0);
 
@@ -252,6 +268,14 @@ namespace PushizoSdk.Internal
         public void SetPreferences(string preferencesJson, NativeResult result) =>
             hs_set_preferences(Utf8(preferencesJson), Register(s_results, result), s_resultCallback);
 
+        public void SetAdsPersonalizationConsent(bool granted, NativeResult result) =>
+            hs_set_ads_personalization_consent(granted ? 1 : 0, Register(s_results, result), s_resultCallback);
+
+        public void GetConsents(NativeResult result) =>
+            hs_get_consents(Register(s_results, result), s_resultCallback);
+
+        public void SetAdvertisingId(string? id) => hs_set_advertising_id(Utf8OrNull(id));
+
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
             hs_send_event(Utf8(name), Utf8(propertiesJson), value, hasValue ? 1 : 0);
 
@@ -269,6 +293,14 @@ namespace PushizoSdk.Internal
 
         public void RequestLocationPermission(string? rationale, Action<bool> completion) =>
             hs_location_request_permission(Utf8OrNull(rationale), Register(s_permissions, completion), s_permissionCallback);
+
+        public bool GetLocationPermissionGranted() => hs_location_permission_granted() != 0;
+
+        public bool GetLocationBackgroundPermissionGranted() => hs_location_background_permission_granted() != 0;
+
+        /// <summary>iOS'ta arka plan izni "her zaman" iznidir; açıklama metni kullanılmaz (sistem istemi Info.plist metnini gösterir).</summary>
+        public void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion) =>
+            hs_location_request_always_permission(Register(s_permissions, completion), s_permissionCallback);
 
         public bool GetGeofencingEnabled() => hs_location_is_geofencing_enabled() != 0;
 

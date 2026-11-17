@@ -45,6 +45,9 @@ namespace PushizoSdk.Internal
         public string? Login(string externalId, string? identityHash, string? jwt) =>
             NullIfEmpty(Call<string>("login", externalId, Text(identityHash), Text(jwt)));
 
+        public string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt) =>
+            NullIfEmpty(Call<string>("loginWithProfile", externalId, profileJson, Text(identityHash), Text(jwt)));
+
         public string? UpdateUserJwt(string jwt) => NullIfEmpty(Call<string>("updateUserJwt", jwt));
 
         public void Logout() => Call("logout");
@@ -75,6 +78,8 @@ namespace PushizoSdk.Internal
 
         public void RemoveSms(string phoneNumber) => Call("removeSms", phoneNumber);
 
+        public string? RegisterAdm(string token) => NullIfEmpty(Call<string>("registerAdm", token));
+
         public string GetEmails() => Call<string>("emails");
 
         public string GetSmsNumbers() => Call<string>("smsNumbers");
@@ -104,6 +109,11 @@ namespace PushizoSdk.Internal
         }
 
         public void RemoveGroupedNotifications(string group) => Call("removeGroupedNotifications", group);
+
+        /// <summary>Android'de başlatıcı rozeti görünen bildirimlerden hesaplanır; rozet sayısı ayarlanamaz (çağrı etkisiz).</summary>
+        public void SetBadgeCount(int count)
+        {
+        }
 
         public void SetForegroundHandlerEnabled(bool enabled) => Call("setForegroundHandlerEnabled", enabled);
 
@@ -144,6 +154,13 @@ namespace PushizoSdk.Internal
 
         public void SetPreferences(string preferencesJson, NativeResult result) => Call("setPreferences", preferencesJson, new ResultCallback(result));
 
+        public void SetAdsPersonalizationConsent(bool granted, NativeResult result) =>
+            Call("setAdsPersonalizationConsent", granted, new ResultCallback(result));
+
+        public void GetConsents(NativeResult result) => Call("getConsents", new ResultCallback(result));
+
+        public void SetAdvertisingId(string? id) => Call("setAdvertisingId", Text(id));
+
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
             Call("sendEvent", name, propertiesJson, value, hasValue);
 
@@ -167,6 +184,17 @@ namespace PushizoSdk.Internal
         {
             using var activity = CurrentActivity();
             Call("requestLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
+        }
+
+        public bool GetLocationPermissionGranted() => Call<bool>("locationPermissionGranted");
+
+        public bool GetLocationBackgroundPermissionGranted() => Call<bool>("locationBackgroundPermissionGranted");
+
+        /// <summary>Açıklama diyaloğu ve sistem izni Java köprüsündedir; sonuç etkinlik ön plana döndüğünde gelir.</summary>
+        public void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion)
+        {
+            using var activity = CurrentActivity();
+            Call("requestBackgroundLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
         }
 
         public bool GetGeofencingEnabled() => Call<bool>("geofencingEnabled");

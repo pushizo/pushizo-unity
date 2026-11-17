@@ -307,9 +307,9 @@ Pushizo.Location.SetGeofencingEnabled(false);  // kayıtlı bölgeler kaldırıl
 
 - Paket izin istemez, manifest'e veya Info.plist'e izin eklemez; mağaza beyanları ve aydınlatma metni uygulamanındır.
 - **iOS:** Info.plist'e `NSLocationAlwaysAndWhenInUseUsageDescription` ekleyin ve "her zaman" iznini uygulamanız istesin
-  (önce "kullanırken" izni verilmiş olmalı). İzin yoksa izleme başlamaz; 100 metrenin altındaki bölgeler güvenilir değildir.
-- **Android:** manifest'e `ACCESS_BACKGROUND_LOCATION` ekleyip izni uygulamanız istesin (Android 11+ sistem Ayarlar
-  ekranını açar); uygulamanın Gradle bağımlılıklarına `com.google.android.gms:play-services-location` ekleyin. Sınıf yoksa
+  (`Pushizo.Location.RequestBackgroundPermissionAsync()`; önce "kullanırken" izni verilmiş olmalı). İzin yoksa izleme başlamaz; 100 metrenin altındaki bölgeler güvenilir değildir.
+- **Android:** manifest'e `ACCESS_BACKGROUND_LOCATION` ekleyip izni uygulamanız istesin
+  (`Pushizo.Location.RequestBackgroundPermissionAsync()`; Android 11+ sistem Ayarlar ekranını açar); uygulamanın Gradle bağımlılıklarına `com.google.android.gms:play-services-location` ekleyin. Sınıf yoksa
   (HMS cihazları, bağımlılığı eklemeyen uygulama) `SetGeofencingEnabled(true)` uyarı günlüğü yazar ve izleme başlamaz; ön
   plan konumu çalışmaya devam eder.
 - `SetShared(false)`, `SetGeofencingEnabled(false)` ve gizlilik onayının geri alınması kayıtlı bölgeleri kaldırır.
@@ -340,6 +340,45 @@ Pushizo.Delivery.OpenSettings(DeliverySetting.AutoStart);     // kendi arayüzü
   uygun anı uygulama seçer.
 - Yalnızca Android'de etkilidir: iOS'ta, Editor'de ve `Initialize` öncesinde durum `DeliveryStatus.Unsupported` (`Supported` false, `Risk` `None`) döner,
   `OpenSettings` ile `ShowGuidanceAsync` hiçbir şey yapmadan `false` döner. Çağrılar istisna atmaz.
+
+### Profille giriş, reklam rızası, rozet ve arka plan konum izni
+
+```csharp
+// Giriş + profil tek çağrıda; geçersiz e-posta/telefon girişten önce ArgumentException verir.
+Pushizo.Login("user_42", new PushizoUserProfile
+{
+    Email = "ali@ornek.com",
+    Sms = "+905321234567",
+    Tags = new Dictionary<string, string> { ["plan"] = "pro" },
+    Aliases = new Dictionary<string, string> { ["crm_id"] = "42" },
+}, jwt: token);
+
+// Reklam kişiselleştirme rızası ve reklam kimliği (GAID / ATT izni sonrası IDFA; kimliği oyun okur).
+UserPreferences prefs = await Pushizo.User.SetAdsPersonalizationConsentAsync(true);
+IReadOnlyList<UserConsent> consents = await Pushizo.User.GetConsentsAsync(); // Purpose, Granted, Source, UpdatedAt
+Pushizo.Ads.SetAdvertisingId(advertisingId);   // null: sunucudaki kayıt silinir
+
+Pushizo.Notifications.SetBadgeCount(3);        // iOS rozeti; Android'de etkisiz
+Pushizo.Notifications.ClearBadge();
+
+// Konum izin durumu ve arka plan ("her zaman") izni: bölge izleme için.
+bool foreground = Pushizo.Location.PermissionGranted;
+bool background = Pushizo.Location.BackgroundPermissionGranted;
+bool granted = await Pushizo.Location.RequestBackgroundPermissionAsync("Mağazaya yaklaşınca haber veririz.");
+
+bool listening = await Pushizo.Chat.IsListeningAsync();
+Pushizo.User.RegisterAdm(admRegistrationId);   // Fire OS ADM; iOS'ta etkisiz
+```
+
+- `RequestBackgroundPermissionAsync` ile `RequestAlwaysPermissionAsync` aynı izni ister: Android'de açıklama diyaloğu ve
+  `ACCESS_BACKGROUND_LOCATION` (Android 11 ve sonrasında sistem Ayarlar ekranı; manifest'te izin yoksa `false`), iOS'ta
+  "her zaman" izni (`NSLocationAlwaysAndWhenInUseUsageDescription` gerekir, açıklama metni kullanılmaz). Önce ön plan
+  konum izni verilmiş olmalıdır.
+- Rıza çağrıları tercih ucunu kullanır: kayıtlı abonelik gerekir (yoksa `NOT_READY`), Editor'de `PLATFORM_NOT_SUPPORTED` döner.
+- Reklam kimliğini SDK okumaz (reklam kitaplığı ve ATT istemi içermez); kimlik yalnızca `ads_personalization` rızası olan
+  kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir.
+- Tek platformlu çağrılar diğer platformda ve Editor'de etkisizdir, istisna atmaz: rozet Android'de (rozet görünen
+  bildirimlerden hesaplanır), `RegisterAdm` iOS'ta; Editor'de izin durumları ve `IsListeningAsync` `false` döner.
 
 ### Özellik bayrakları
 

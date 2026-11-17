@@ -293,6 +293,41 @@ namespace PushizoSdk
         public IReadOnlyList<PreferenceCategory> Categories { get; }
     }
 
+    /// <summary>
+    /// Rıza kaydı (<c>User.GetConsentsAsync</c>; ADR-0037). <see cref="Purpose"/> rıza amacıdır (ör.
+    /// <c>ads_personalization</c>); <see cref="Source"/> kaydı yazan taraftır.
+    /// </summary>
+    public sealed class UserConsent
+    {
+        internal UserConsent(string purpose, bool granted, string? source, DateTimeOffset? updatedAt)
+        {
+            Purpose = purpose;
+            Granted = granted;
+            Source = source;
+            UpdatedAt = updatedAt;
+        }
+
+        public string Purpose { get; }
+        public bool Granted { get; }
+        public string? Source { get; }
+        /// <summary>Kayıt yoksa null.</summary>
+        public DateTimeOffset? UpdatedAt { get; }
+    }
+
+    /// <summary>
+    /// Girişle birlikte ayarlanan profil (<c>Pushizo.Login("user_42", new PushizoUserProfile { Email = "ali@ornek.com" })</c>).
+    /// Geçersiz e-posta veya telefon girişten önce reddedilir; yarım kalmış bir kimlik değişimi olmaz.
+    /// </summary>
+    public struct PushizoUserProfile
+    {
+        /// <summary>E-posta aboneliği (küçük harfe çevrilir).</summary>
+        public string? Email { get; set; }
+        /// <summary>SMS aboneliği (E.164'e normalize edilir).</summary>
+        public string? Sms { get; set; }
+        public IReadOnlyDictionary<string, string>? Tags { get; set; }
+        public IReadOnlyDictionary<string, string>? Aliases { get; set; }
+    }
+
     /// <summary><c>User.SetPreferencesAsync</c> girdisi; <see cref="Channel"/> null ise tüm kanallar.</summary>
     public sealed class PreferenceInput
     {

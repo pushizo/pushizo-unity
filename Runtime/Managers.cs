@@ -102,8 +102,55 @@ namespace PushizoSdk
             return Pushizo.Call(r => bridge.SetPreferences(json, r), result => BridgeJson.ParsePreferences(RequireJson(result)));
         }
 
+        /// <summary>
+        /// Reklam kişiselleştirme rızası (ADR-0037): true iken kullanıcının e-posta/telefon özeti app'in bağladığı reklam
+        /// platformlarının kitlelerine gönderilebilir; false rızayı geri alır (sonraki kitle senkronunda çıkarılır). Güncel
+        /// tercih listesini döndürür; hata davranışı <see cref="SetPreferencesAsync"/> ile aynıdır.
+        /// </summary>
+        public Task<UserPreferences> SetAdsPersonalizationConsentAsync(bool granted)
+        {
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.SetAdsPersonalizationConsent(granted, r), result => BridgeJson.ParsePreferences(RequireJson(result)));
+        }
+
+        /// <summary>Rıza kayıtları (<c>ads_personalization</c> …). Abonelik kaydı tamamlanmadan <see cref="PushizoException"/> (<c>NOT_READY</c>).</summary>
+        public Task<IReadOnlyList<UserConsent>> GetConsentsAsync()
+        {
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.GetConsents(r), json => BridgeJson.ParseConsents(RequireJson(json)));
+        }
+
+        /// <summary>
+        /// Fire OS ADM kayıt kimliğini bildirir (yalnızca Android; ADM kaydını kendisi yapan uygulamalar içindir, ana FCM
+        /// aboneliğinin yerine geçmez). Kimlik 8-4096 karakter olmalıdır; geçersizse <see cref="ArgumentException"/>. iOS ve
+        /// Editor'de etkisizdir.
+        /// </summary>
+        public void RegisterAdm(string token)
+        {
+            var value = token?.Trim() ?? string.Empty;
+            if (value.Length < 8 || value.Length > 4096) throw new ArgumentException("ADM kayıt kimliği 8-4096 karakter olmalı.", nameof(token));
+            var error = Pushizo.Bridge().RegisterAdm(value);
+            if (error != null) throw new ArgumentException(error, nameof(token));
+        }
+
         private static string RequireJson(string? json) =>
             json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.");
+    }
+
+    /// <summary>
+    /// Mobil reklam kimliği (<c>Pushizo.Ads</c>, ADR-0037). SDK reklam kitaplığı ve izin istemi içermez: kimliği (Android
+    /// GAID, iOS App Tracking Transparency izni sonrası IDFA) oyun okur ve verir. Kimlik yalnızca
+    /// <c>ads_personalization</c> rızası olan kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir. Editor'de etkisizdir.
+    /// </summary>
+    public sealed class AdsManager
+    {
+        internal AdsManager()
+        {
+        }
+
+        /// <summary>Reklam kimliğini yazar; null, boş veya sıfır kimlik sunucudaki kaydı siler.</summary>
+        public void SetAdvertisingId(string? id) =>
+            Pushizo.Bridge().SetAdvertisingId(string.IsNullOrWhiteSpace(id) ? null : id!.Trim());
     }
 
     /// <summary>Push aboneliği (<c>Pushizo.User.PushSubscription</c>).</summary>
@@ -276,6 +323,19 @@ namespace PushizoSdk
             if (string.IsNullOrWhiteSpace(group)) throw new ArgumentException("Grup anahtarı gerekli.", nameof(group));
             Pushizo.Bridge().RemoveGroupedNotifications(group);
         }
+
+        /// <summary>
+        /// Uygulama rozetini ayarlar (iOS; bildirim servis uzantısıyla paylaşılan sayaç da eşitlenir). Android'de rozet
+        /// görünen bildirimlerden hesaplandığı için çağrı etkisizdir. Negatif değerde <see cref="ArgumentOutOfRangeException"/>.
+        /// </summary>
+        public void SetBadgeCount(int count)
+        {
+            if (count < 0) throw new ArgumentOutOfRangeException(nameof(count), "Rozet sayısı negatif olamaz.");
+            Pushizo.Bridge().SetBadgeCount(count);
+        }
+
+        /// <summary>Rozeti sıfırlar (iOS; Android'de etkisiz).</summary>
+        public void ClearBadge() => Pushizo.Bridge().SetBadgeCount(0);
 
         internal void DispatchClicked(NotificationClickedEventArgs args)
         {
@@ -611,6 +671,37 @@ namespace PushizoSdk
             var text = string.IsNullOrWhiteSpace(rationale) ? null : rationale!.Trim();
             return Pushizo.CallBool((bridge, done) => bridge.RequestLocationPermission(text, done));
         }
+
+        /// <summary>
+        /// Ön plan konum izni verilmiş mi (Android yaklaşık veya hassas; iOS "kullanırken" veya "her zaman"). Başlatılmadan
+        /// önce ve Editor'de false.
+        /// </summary>
+        public bool PermissionGranted => Pushizo.BridgeOrNull()?.GetLocationPermissionGranted() ?? false;
+
+        /// <summary>
+        /// Arka plan konum izni verilmiş mi (Android <c>ACCESS_BACKGROUND_LOCATION</c> + hassas konum; iOS "her zaman").
+        /// Başlatılmadan önce ve Editor'de false.
+        /// </summary>
+        public bool BackgroundPermissionGranted => Pushizo.BridgeOrNull()?.GetLocationBackgroundPermissionGranted() ?? false;
+
+        /// <summary>
+        /// Arka plan konum iznini ister (bölge izleme için; önce ön plan izni verilmiş olmalıdır). Android: açıklama diyaloğu
+        /// (<paramref name="rationale"/>; boşsa SDK'nın yerelleştirilmiş metni), ardından sistem izni (Android 11+ Ayarlar
+        /// ekranı); manifest'te <c>ACCESS_BACKGROUND_LOCATION</c> yoksa false. iOS: "her zaman" izni
+        /// (<paramref name="rationale"/> kullanılmaz; <c>NSLocationAlwaysAndWhenInUseUsageDescription</c> gerekir). Sonuç ana
+        /// iş parçacığında: izin var veya verildiyse true. Editor'de false.
+        /// </summary>
+        public Task<bool> RequestBackgroundPermissionAsync(string? rationale = null)
+        {
+            var text = string.IsNullOrWhiteSpace(rationale) ? null : rationale!.Trim();
+            return Pushizo.CallBool((bridge, done) => bridge.RequestBackgroundLocationPermission(text, done));
+        }
+
+        /// <summary>
+        /// "Her zaman" konum iznini ister (iOS adı). <see cref="RequestBackgroundPermissionAsync"/> ile aynı kavramdır;
+        /// Android'de arka plan konum izni akışını SDK'nın varsayılan açıklamasıyla çalıştırır.
+        /// </summary>
+        public Task<bool> RequestAlwaysPermissionAsync() => RequestBackgroundPermissionAsync();
 
         /// <summary>Arka plan bölge izleme açık mı (kalıcı tercih; varsayılan kapalı). Başlatılmadan önce false.</summary>
         public bool IsGeofencingEnabled => Pushizo.BridgeOrNull()?.GetGeofencingEnabled() ?? false;

@@ -65,6 +65,52 @@ namespace PushizoSdk.Tests
             return LoginError;
         }
 
+        public string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt)
+        {
+            Record("loginWithProfile:" + externalId + ":" + profileJson + ":" + (identityHash ?? "<null>") + (jwt == null ? "" : ":jwt=" + jwt));
+            return LoginError;
+        }
+
+        /// <summary>RegisterAdm yanıtı (yerel SDK'nın geçersiz kimlik hatası; null = başarı).</summary>
+        public string? RegisterAdmError { get; set; }
+
+        public string? RegisterAdm(string token)
+        {
+            Record("registerAdm:" + token);
+            return RegisterAdmError;
+        }
+
+        public void SetBadgeCount(int count) => Record("badge:" + count);
+
+        public void SetAdvertisingId(string? id) => Record("advertisingId:" + (id ?? "<null>"));
+
+        /// <summary>Rıza yanıtı (<c>{"consents":[…]}</c>).</summary>
+        public string? ConsentsJson { get; set; } = @"{""consents"":[]}";
+
+        public void SetAdsPersonalizationConsent(bool granted, NativeResult result) =>
+            RespondPreferences("setAdsPersonalizationConsent:" + granted, result);
+
+        public void GetConsents(NativeResult result)
+        {
+            Record("getConsents");
+            result(PreferencesErrorCode == null ? ConsentsJson : null, PreferencesErrorCode, PreferencesErrorCode);
+        }
+
+        /// <summary>Yerel konum izinleri ve arka plan izni isteğinin sonucu.</summary>
+        public bool LocationPermissionGrantedValue { get; set; }
+        public bool LocationBackgroundPermissionGrantedValue { get; set; }
+        public bool BackgroundLocationPermissionResult { get; set; } = true;
+
+        public bool GetLocationPermissionGranted() => LocationPermissionGrantedValue;
+
+        public bool GetLocationBackgroundPermissionGranted() => LocationBackgroundPermissionGrantedValue;
+
+        public void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion)
+        {
+            Record("requestBackgroundLocationPermission:" + (rationale ?? "<null>"));
+            completion(BackgroundLocationPermissionResult);
+        }
+
         public string? UpdateUserJwt(string jwt)
         {
             Record("updateUserJwt:" + jwt);

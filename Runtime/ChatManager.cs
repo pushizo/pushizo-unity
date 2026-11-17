@@ -319,6 +319,10 @@ namespace PushizoSdk
         /// <summary>Canlı dinlemeyi durdurur (arka plana geçişte önerilir; temsilci mesajı push ile gelir).</summary>
         public Task StopListeningAsync() => Call<object?>("stopListening", new Dictionary<string, object?>(), _ => null);
 
+        /// <summary>Canlı dinleme (<see cref="StartListeningAsync"/>) açık mı. Editor'de false.</summary>
+        public Task<bool> IsListeningAsync() =>
+            Call("isListening", new Dictionary<string, object?>(), json => ChatJson.ParseBool(Require(json), "listening"));
+
         /// <summary>Ek dosyasının adresi; ziyaretçi belirtecini taşır, yalnızca görsel yükleyiciye verin ve loglamayın.</summary>
         public Task<string> GetAttachmentUrlAsync(string attachmentId, bool download = false)
         {
@@ -430,6 +434,8 @@ namespace PushizoSdk
         public static int ParseUnread(string json) => (int)Long(Json.ParseObject(json), "unreadCount");
 
         public static string? ParseString(string json, string name) => Str(Json.ParseObject(json), name);
+
+        public static bool ParseBool(string json, string name) => Bool(Json.ParseObject(json), name);
 
         /// <summary><c>chat</c> olayı; bilinmeyen tür (daha yeni yerel köprü) null döner.</summary>
         public static ChatEventArgs? ParseEvent(string json)

@@ -25,6 +25,13 @@ namespace PushizoSdk.Internal
         /// <summary>Kanıt app'in kimlik doğrulama kipine uymuyorsa hata mesajı döner (giriş yapılmaz); başarıda null.</summary>
         string? Login(string externalId, string? identityHash, string? jwt);
 
+        /// <summary>
+        /// Giriş + profil (yerel <c>login(externalId, profile, …)</c>). <paramref name="profileJson"/>:
+        /// <c>{"email"?, "sms"?, "tags"?: {}, "aliases"?: {}}</c> (C# katmanında doğrulanmış/normalize edilmiş). Geçersiz
+        /// profil veya kanıt hatasında mesaj döner ve giriş yapılmaz; başarıda null.
+        /// </summary>
+        string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt);
+
         /// <summary>Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda null.</summary>
         string? UpdateUserJwt(string jwt);
         void Logout();
@@ -41,6 +48,8 @@ namespace PushizoSdk.Internal
         void RemoveEmail(string email);
         void AddSms(string phoneNumber);
         void RemoveSms(string phoneNumber);
+        /// <summary>Fire OS ADM kayıt kimliği (yalnızca Android). Geçersiz kimlikte hata mesajı, başarıda ve diğer platformlarda null.</summary>
+        string? RegisterAdm(string token);
         string GetEmails();
         string GetSmsNumbers();
         string GetPushSubscription();
@@ -53,6 +62,9 @@ namespace PushizoSdk.Internal
         void RemoveNotification(string id);
         /// <summary>Android <c>android_group</c> / iOS <c>thread-id</c> grubundaki bildirimleri kaldırır.</summary>
         void RemoveGroupedNotifications(string group);
+
+        /// <summary>Uygulama rozetini ayarlar (yalnızca iOS; Android'de rozet görünen bildirimlerden hesaplanır, çağrı etkisizdir).</summary>
+        void SetBadgeCount(int count);
 
         /// <summary>
         /// true: ön planda gelen bildirim yerelde ertelenir ve <c>foreground</c> olayı (<c>eventId</c> ile) üretilir;
@@ -83,8 +95,9 @@ namespace PushizoSdk.Internal
         /// <summary>
         /// Canlı sohbet çağrısı (ADR-0040). <paramref name="method"/>: start, getConfig, getConversation, getMessages,
         /// sendMessage, sendAttachment (base64), markRead, refreshUnreadCount, getUnreadCount, leaveOfflineMessage, setTyping,
-        /// startListening, stopListening, attachmentUrl, getVisitorId. Başarı JSON'u yerel modelin camelCase sözlüğü
-        /// (sayaçlar <c>{"unreadCount"}</c>, adres <c>{"url"}</c>, kimlik <c>{"visitorId"}</c>; dönüşsüz işlemlerde null).
+        /// startListening, stopListening, attachmentUrl, getVisitorId, isListening. Başarı JSON'u yerel modelin camelCase sözlüğü
+        /// (sayaçlar <c>{"unreadCount"}</c>, adres <c>{"url"}</c>, kimlik <c>{"visitorId"}</c>, dinleme <c>{"listening"}</c>;
+        /// dönüşsüz işlemlerde null).
         /// </summary>
         void ChatCall(string method, string argsJson, NativeResult result);
 
@@ -99,6 +112,14 @@ namespace PushizoSdk.Internal
         /// <see cref="GetPreferences"/> ile aynı (güncel liste).
         /// </summary>
         void SetPreferences(string preferencesJson, NativeResult result);
+        /// <summary>Reklam kişiselleştirme rızası (ADR-0037); başarı JSON'u <see cref="GetPreferences"/> ile aynı.</summary>
+        void SetAdsPersonalizationConsent(bool granted, NativeResult result);
+
+        /// <summary>Rıza kayıtları. Başarı JSON'u: <c>{"consents":[{"purpose","granted","source","updatedAt"}]}</c> (zaman epoch ms).</summary>
+        void GetConsents(NativeResult result);
+
+        /// <summary>Mobil reklam kimliği (GAID/IDFA; ADR-0037); null sunucudaki kaydı siler.</summary>
+        void SetAdvertisingId(string? id);
         void SendEvent(string name, string propertiesJson, double value, bool hasValue);
 
         /// <summary>
@@ -130,6 +151,18 @@ namespace PushizoSdk.Internal
         /// metni). Sonuç: izin var/verildi mi; herhangi bir iş parçacığından gelebilir.
         /// </summary>
         void RequestLocationPermission(string? rationale, Action<bool> completion);
+
+        /// <summary>Ön plan konum izni verilmiş mi (Android yaklaşık/hassas; iOS "kullanırken" veya "her zaman").</summary>
+        bool GetLocationPermissionGranted();
+
+        /// <summary>Arka plan konum izni verilmiş mi (Android <c>ACCESS_BACKGROUND_LOCATION</c>; iOS "her zaman").</summary>
+        bool GetLocationBackgroundPermissionGranted();
+
+        /// <summary>
+        /// Arka plan konum iznini ister (Android: açıklama diyaloğu + sistem izni; iOS: "her zaman" izni,
+        /// <paramref name="rationale"/> yok sayılır). Sonuç: arka plan izni var/verildi mi; herhangi bir iş parçacığından gelebilir.
+        /// </summary>
+        void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion);
 
         /// <summary>Arka plan bölge izleme açık mı (ADR-0065; yerel SDK'nın kalıcı tercihi, varsayılan kapalı).</summary>
         bool GetGeofencingEnabled();

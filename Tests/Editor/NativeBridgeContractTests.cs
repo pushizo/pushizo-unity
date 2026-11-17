@@ -37,6 +37,9 @@ namespace PushizoSdk.Tests
                 "hs_location_is_geofencing_enabled", "hs_location_set_geofencing_enabled",
                 "hs_feature_flags_refresh", "hs_feature_flags_is_enabled", "hs_feature_flags_value",
                 "hs_placements_list", "hs_placements_report",
+                "hs_login_with_profile", "hs_set_ads_personalization_consent", "hs_get_consents", "hs_set_advertising_id",
+                "hs_set_badge_count", "hs_location_permission_granted", "hs_location_background_permission_granted",
+                "hs_location_request_always_permission",
             }, imports);
             CollectionAssert.IsEmpty(imports.Except(exports), "Swift köprüsünde @_cdecl karşılığı olmayan DllImport");
         }
@@ -55,6 +58,8 @@ namespace PushizoSdk.Tests
                 "featureFlagsRefresh", "featureFlagIsEnabled", "featureFlagValue",
                 "placementsList", "placementsReport",
                 "deliveryStatus", "deliveryShouldShowGuidance", "deliveryOpenSettings", "deliveryShowGuidance",
+                "loginWithProfile", "registerAdm", "setAdsPersonalizationConsent", "getConsents", "setAdvertisingId",
+                "locationPermissionGranted", "locationBackgroundPermissionGranted", "requestBackgroundLocationPermission",
             }, calls);
             CollectionAssert.IsEmpty(calls.Except(methods), "Java köprüsünde public static karşılığı olmayan çağrı");
         }

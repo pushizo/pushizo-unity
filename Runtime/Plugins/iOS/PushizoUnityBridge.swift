@@ -4,6 +4,7 @@ import Pushizo
 #if canImport(PushizoCore)
 import PushizoCore
 #endif
+import CoreLocation
 import UIKit
 import UserNotifications
 
@@ -425,6 +426,29 @@ public func hs_login(_ externalId: UnsafePointer<CChar>?, _ identityHash: Unsafe
     return nil
 }
 
+/// Giriş + profil. Yerel iOS SDK'sında profil aşırı yüklemesi olmadığından Android davranışı burada uygulanır: e-posta ve
+/// telefon girişten ÖNCE doğrulanır (geçersizse hata mesajı, giriş yapılmaz), sonra giriş, ardından e-posta/SMS/tag/alias.
+/// profileJson: {"email"?, "sms"?, "tags"?: {}, "aliases"?: {}}. Başarıda nil; C# `hs_free` ile serbest bırakır.
+@_cdecl("hs_login_with_profile")
+public func hs_login_with_profile(_ externalId: UnsafePointer<CChar>?, _ profileJson: UnsafePointer<CChar>?, _ identityHash: UnsafePointer<CChar>?, _ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let id = hsuNonEmpty(externalId) else { return hsuDup("externalId gerekli") }
+    let profile = hsuJsonObject(profileJson) as? [String: Any] ?? [:]
+    let email = (profile["email"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    let sms = (profile["sms"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    if let email, HSContacts.normalizeEmail(email) == nil { return hsuDup("Geçersiz e-posta adresi") }
+    if let sms, HSContacts.normalizePhone(sms) == nil { return hsuDup("Geçersiz telefon numarası") }
+    let hash = hsuNonEmpty(identityHash), token = hsuNonEmpty(jwt)
+    if let message = Pushizo.loginProofError(identityHash: hash, jwt: token) { return hsuDup(message) }
+    Pushizo.login(id, identityHash: hash, jwt: token)
+    if let email { Pushizo.User.addEmail(email) }
+    if let sms { Pushizo.User.addSms(sms) }
+    let tags = (profile["tags"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
+    if !tags.isEmpty { Pushizo.User.addTags(tags) }
+    let aliases = (profile["aliases"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
+    if !aliases.isEmpty { Pushizo.User.addAliases(aliases) }
+    return nil
+}
+
 /// Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda nil.
 @_cdecl("hs_update_user_jwt")
 public func hs_update_user_jwt(_ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
@@ -542,6 +566,10 @@ public func hs_remove_notification(_ identifier: UnsafePointer<CChar>?) {
     guard let id = hsuString(identifier), !id.isEmpty else { return }
     Pushizo.Notifications.removeNotification(identifier: id)
 }
+
+/// Uygulama rozetini ayarlar ve bildirim servis uzantısıyla paylaşılan sayacı eşitler; negatif değer 0 sayılır.
+@_cdecl("hs_set_badge_count")
+public func hs_set_badge_count(_ count: Int32) { Pushizo.Notifications.setBadgeCount(max(0, Int(count))) }
 
 /// Aynı `thread-id`'ye sahip bildirimleri bildirim merkezinden kaldırır.
 @_cdecl("hs_remove_grouped_notifications")
@@ -666,6 +694,8 @@ public func hs_chat_call(_ method: UnsafePointer<CChar>?, _ argsJson: UnsafePoin
         }
     case "getVisitorId":
         hsuInbox(requestId, callback) { json(["visitorId": Pushizo.Chat.visitorId ?? NSNull()]) }
+    case "isListening":
+        hsuInbox(requestId, callback) { json(["listening": Pushizo.Chat.isListening]) }
     default:
         hsuInbox(requestId, callback) { throw HSChatError.invalidArgument("bilinmeyen sohbet yöntemi: \(name)") }
     }
@@ -756,6 +786,31 @@ public func hs_set_preferences(_ json: UnsafePointer<CChar>?, _ requestId: Int32
     }
 }
 
+/// Reklam kişiselleştirme rızası (ADR-0037); başarı JSON'u hs_get_preferences ile aynı (güncel liste).
+@_cdecl("hs_set_ads_personalization_consent")
+public func hs_set_ads_personalization_consent(_ granted: Int32, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let value = granted != 0
+    hsuInbox(requestId, callback) {
+        let result: HSPreferencesResult = try await Pushizo.User.setAdsPersonalizationConsent(value)
+        return hsuJsonString(hsuPreferencesResultJson(result))
+    }
+}
+
+/// Rıza kayıtları. Başarı JSON'u: {"consents":[{"purpose","granted","source","updatedAt"}]} (zaman epoch ms).
+@_cdecl("hs_get_consents")
+public func hs_get_consents(_ requestId: Int32, _ callback: HSUResultCallback?) {
+    hsuInbox(requestId, callback) {
+        let consents = try await Pushizo.User.getConsents()
+        return hsuJsonString(["consents": consents.map { consent -> [String: Any] in
+            ["purpose": consent.purpose, "granted": consent.granted, "source": consent.source ?? NSNull(), "updatedAt": hsuMillis(consent.updatedAt)]
+        }])
+    }
+}
+
+/// Mobil reklam kimliği (IDFA; ADR-0037). nil veya boş metin sunucudaki kaydı siler.
+@_cdecl("hs_set_advertising_id")
+public func hs_set_advertising_id(_ id: UnsafePointer<CChar>?) { Pushizo.Ads.setAdvertisingId(hsuNonEmpty(id)) }
+
 /// propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue 0 ise değer gönderilmez.
 @_cdecl("hs_send_event")
 public func hs_send_event(_ name: UnsafePointer<CChar>?, _ propertiesJson: UnsafePointer<CChar>?, _ value: Double, _ hasValue: Int32) {
@@ -819,6 +874,28 @@ public func hs_location_set_shared(_ shared: Int32) { Pushizo.Location.setShared
 public func hs_location_request_permission(_ rationale: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUPermissionCallback?) {
     let text = hsuNonEmpty(rationale)
     Pushizo.Location.requestPermission(rationale: text) { granted in
+        callback?(requestId, granted ? 1 : 0)
+    }
+}
+
+/// Konum yetki durumu. Yerel SDK bunu dışa açmadığından köprü `CLLocationManager`'dan okur (yerel SDK en az iOS 15 ister).
+private func hsuLocationAuthorization() -> CLAuthorizationStatus { CLLocationManager().authorizationStatus }
+
+/// Ön plan konum izni verilmiş mi ("kullanırken" veya "her zaman").
+@_cdecl("hs_location_permission_granted")
+public func hs_location_permission_granted() -> Int32 {
+    let status = hsuLocationAuthorization()
+    return status == .authorizedWhenInUse || status == .authorizedAlways ? 1 : 0
+}
+
+/// Arka plan konum izni verilmiş mi ("her zaman").
+@_cdecl("hs_location_background_permission_granted")
+public func hs_location_background_permission_granted() -> Int32 { hsuLocationAuthorization() == .authorizedAlways ? 1 : 0 }
+
+/// "Her zaman" konum iznini ister; önce "kullanırken" izni verilmiş olmalıdır. Sonuç ana iş parçacığında: 1/0.
+@_cdecl("hs_location_request_always_permission")
+public func hs_location_request_always_permission(_ requestId: Int32, _ callback: HSUPermissionCallback?) {
+    Pushizo.Location.requestAlwaysPermission { granted in
         callback?(requestId, granted ? 1 : 0)
     }
 }

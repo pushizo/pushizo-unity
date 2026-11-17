@@ -142,6 +142,42 @@ namespace PushizoSdk.Internal
             return new UserPreferences(preferences, categories);
         }
 
+        /// <summary><c>{"consents":[{"purpose","granted","source","updatedAt"}]}</c>; amacı olmayan kayıt atlanır (yerel SDK'larla aynı).</summary>
+        public static IReadOnlyList<UserConsent> ParseConsents(string json)
+        {
+            var consents = new List<UserConsent>();
+            if (Object(json).TryGetValue("consents", out var value) && value is List<object?> list)
+            {
+                foreach (var element in list)
+                {
+                    if (!(element is Dictionary<string, object?> e)) continue;
+                    var purpose = Str(e, "purpose");
+                    if (string.IsNullOrEmpty(purpose)) continue;
+                    consents.Add(new UserConsent(purpose!, Bool(e, "granted"), Str(e, "source"), Millis(e, "updatedAt")));
+                }
+            }
+            return consents;
+        }
+
+        /// <summary>
+        /// <see cref="INativeBridge.LoginWithProfile"/> gövdesi: doğrulanmış profil; boş alanlar yazılmaz. Profil tümüyle
+        /// boşsa null (düz giriş yeterlidir).
+        /// </summary>
+        public static string? ProfileToJson(PushizoUserProfile profile)
+        {
+            var body = new Dictionary<string, object?>();
+            if (!string.IsNullOrWhiteSpace(profile.Email)) body["email"] = Validation.RequireEmail(profile.Email!, nameof(profile));
+            if (!string.IsNullOrWhiteSpace(profile.Sms)) body["sms"] = Validation.RequirePhone(profile.Sms!, nameof(profile));
+            if (profile.Tags != null)
+            {
+                var tags = Validation.RequireTags(profile.Tags, nameof(profile));
+                if (tags.Count > 0) body["tags"] = tags.ToDictionary(p => p.Key, p => (object?)p.Value);
+            }
+            if (profile.Aliases != null && profile.Aliases.Count > 0)
+                body["aliases"] = Validation.NormalizeAliases(profile.Aliases, nameof(profile)).ToDictionary(p => p.Key, p => (object?)p.Value);
+            return body.Count == 0 ? null : Json.Serialize(body);
+        }
+
         /// <summary>
         /// <c>{"value":…}</c> (<see cref="INativeBridge.FeatureFlagValue"/>): metin, long, double, bool, sözlük veya liste;
         /// yanıt boşsa ya da değer yoksa <paramref name="fallback"/>.

@@ -21,6 +21,9 @@ import com.pushizo.sdk.Pushizo;
 import com.pushizo.sdk.HsAction;
 import com.pushizo.sdk.HsApiException;
 import com.pushizo.sdk.HsChatConfig;
+import com.pushizo.sdk.HsConsent;
+import com.pushizo.sdk.HsConsents;
+import com.pushizo.sdk.HsUserProfile;
 import com.pushizo.sdk.HsChatConversationState;
 import com.pushizo.sdk.HsChatEventAdapter;
 import com.pushizo.sdk.HsChatIdentifyResult;
@@ -115,6 +118,8 @@ public final class PushizoUnityBridge {
     private static final int LOCATION_SYSTEM = 2;
     private static int locationPhase = LOCATION_IDLE;
     private static boolean locationPausedSinceRequest;
+    /** Arka plan konum izni bekleyenler: aynı akışı paylaşır, sonuç olarak arka plan izin durumunu alır. */
+    private static final List<PushizoUnityPermissionCallback> BACKGROUND_LOCATION_CALLBACKS = new ArrayList<>();
 
     private PushizoUnityBridge() {
     }
@@ -246,6 +251,27 @@ public final class PushizoUnityBridge {
         }
     }
 
+    /**
+     * Giriş + profil (yerel {@code Pushizo.login(externalId, HsUserProfile, …)}). profileJson: {"email"?, "sms"?, "tags"?: {},
+     * "aliases"?: {}}. Geçersiz e-posta/telefon veya kanıt hatasında mesaj döner (giriş yapılmaz); başarıda null.
+     */
+    public static String loginWithProfile(String externalId, String profileJson, String identityHash, String jwt) {
+        try {
+            JSONObject p = parseObject(profileJson);
+            JSONObject tags = p.optJSONObject("tags");
+            JSONObject aliases = p.optJSONObject("aliases");
+            HsUserProfile profile = new HsUserProfile(
+                    emptyToNull(p.isNull("email") ? null : p.optString("email")),
+                    emptyToNull(p.isNull("sms") ? null : p.optString("sms")),
+                    tags == null ? new HashMap<String, String>() : stringMap(tags.toString()),
+                    aliases == null ? new HashMap<String, String>() : stringMap(aliases.toString()));
+            Pushizo.login(externalId, profile, emptyToNull(identityHash), emptyToNull(jwt));
+            return null;
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return e.getMessage() != null ? e.getMessage() : "kimlik doğrulama hatası";
+        }
+    }
+
     /** Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda null. */
     public static String updateUserJwt(String jwt) {
         try {
@@ -286,6 +312,19 @@ public final class PushizoUnityBridge {
     public static void addSms(String phoneNumber) { Pushizo.User.addSms(phoneNumber); }
 
     public static void removeSms(String phoneNumber) { Pushizo.User.removeSms(phoneNumber); }
+
+    /** Fire OS ADM kayıt kimliği; geçersiz kimlikte (8-4096 karakter dışı) hata mesajı, başarıda null. */
+    public static String registerAdm(String token) {
+        try {
+            Pushizo.User.registerAdm(token);
+            return null;
+        } catch (IllegalArgumentException e) {
+            return "Geçersiz ADM kayıt kimliği";
+        }
+    }
+
+    /** Mobil reklam kimliği (GAID; ADR-0037); boş metin null sayılır ve sunucudaki kaydı siler. */
+    public static void setAdvertisingId(String id) { Pushizo.Ads.setAdvertisingId(emptyToNull(id)); }
 
     public static String emails() { return new JSONArray(Pushizo.User.INSTANCE.getEmails()).toString(); }
 
@@ -422,6 +461,12 @@ public final class PushizoUnityBridge {
             callback.onResult(true);
             return;
         }
+        startLocationRequest(activity, rationale, callback, LOCATION_CALLBACKS);
+    }
+
+    /** Ön plan konum izni akışını başlatır; geri çağrı verilen listeye eklenir (ön plan ya da arka plan sonucu alır). */
+    private static void startLocationRequest(Activity activity, String rationale, PushizoUnityPermissionCallback callback,
+            List<PushizoUnityPermissionCallback> callbacks) {
         if (activity == null) {
             callback.onResult(false);
             return;
@@ -433,24 +478,83 @@ public final class PushizoUnityBridge {
             return;
         }
         synchronized (LOCATION_LOCK) {
-            LOCATION_CALLBACKS.add(callback);
+            callbacks.add(callback);
             if (locationPhase != LOCATION_IDLE) return;
             locationPhase = LOCATION_RATIONALE;
             locationPausedSinceRequest = false;
         }
         String message = rationale == null || rationale.trim().isEmpty() ? null : rationale;
-        activity.runOnUiThread(() -> showLocationRationale(activity, message, permissions));
+        activity.runOnUiThread(() -> showLocationRationale(activity, message, permissions,
+                com.pushizo.sdk.R.string.hs_location_rationale_title, com.pushizo.sdk.R.string.hs_location_rationale_message));
     }
 
-    private static void showLocationRationale(Activity activity, String rationale, String[] permissions) {
+    /** Ön plan konum izni verilmiş mi (yaklaşık veya hassas). */
+    public static boolean locationPermissionGranted() { return Pushizo.Location.getPermissionGranted(); }
+
+    /** Arka plan konum izni verilmiş mi (hassas konum + Android 10 ve sonrasında ACCESS_BACKGROUND_LOCATION). */
+    public static boolean locationBackgroundPermissionGranted() { return Pushizo.Location.getBackgroundPermissionGranted(); }
+
+    /**
+     * Arka plan konum iznini ister (yerel {@code Location.requestBackgroundPermission} davranışı; sonucu bildirmediği için
+     * akış köprüdedir). İzin zaten varsa true; Android 10 öncesinde ön plan konum izni akışı; manifest'te
+     * ACCESS_BACKGROUND_LOCATION yoksa (uyarı loglanır) veya etkinlik yoksa false; aksi halde SDK string kaynaklarıyla
+     * açıklama diyaloğu (mesaj: rationale boş değilse o), "Şimdi değil"/iptal → false; "Devam" → sistem izni (Android 11 ve
+     * sonrasında Ayarlar ekranı). Sonuç etkinlik ön plana döndüğünde güncel arka plan izin durumuyla bildirilir.
+     */
+    public static void requestBackgroundLocationPermission(Activity activity, String rationale, PushizoUnityPermissionCallback callback) {
+        if (Pushizo.Location.getBackgroundPermissionGranted()) {
+            Pushizo.Location.onPermissionResult();
+            callback.onResult(true);
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            startLocationRequest(activity, rationale, callback, BACKGROUND_LOCATION_CALLBACKS);
+            return;
+        }
+        if (activity == null) {
+            callback.onResult(false);
+            return;
+        }
+        if (!backgroundLocationDeclared(activity)) {
+            HsLog.INSTANCE.w("arka plan konum izni istenemedi: uygulama manifest'inde ACCESS_BACKGROUND_LOCATION yok", null);
+            callback.onResult(false);
+            return;
+        }
+        synchronized (LOCATION_LOCK) {
+            BACKGROUND_LOCATION_CALLBACKS.add(callback);
+            if (locationPhase != LOCATION_IDLE) return;
+            locationPhase = LOCATION_RATIONALE;
+            locationPausedSinceRequest = false;
+        }
+        String message = rationale == null || rationale.trim().isEmpty() ? null : rationale;
+        String[] permissions = new String[] { Manifest.permission.ACCESS_BACKGROUND_LOCATION };
+        activity.runOnUiThread(() -> showLocationRationale(activity, message, permissions,
+                com.pushizo.sdk.R.string.hs_geofence_rationale_title, com.pushizo.sdk.R.string.hs_geofence_rationale_message));
+    }
+
+    private static boolean backgroundLocationDeclared(Context context) {
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), PackageManager.GET_PERMISSIONS);
+            if (info.requestedPermissions != null) {
+                for (String permission : info.requestedPermissions) {
+                    if (Manifest.permission.ACCESS_BACKGROUND_LOCATION.equals(permission)) return true;
+                }
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            HsLog.INSTANCE.w("uygulama izinleri okunamadı", e);
+        }
+        return false;
+    }
+
+    private static void showLocationRationale(Activity activity, String rationale, String[] permissions, int titleRes, int messageRes) {
         if (activity.isFinishing() || activity.isDestroyed()) {
             resolveLocationRequest();
             return;
         }
         try {
             new AlertDialog.Builder(activity)
-                    .setTitle(com.pushizo.sdk.R.string.hs_location_rationale_title)
-                    .setMessage(rationale != null ? rationale : activity.getString(com.pushizo.sdk.R.string.hs_location_rationale_message))
+                    .setTitle(titleRes)
+                    .setMessage(rationale != null ? rationale : activity.getString(messageRes))
                     .setPositiveButton(com.pushizo.sdk.R.string.hs_location_rationale_continue, (dialog, which) -> askLocationSystem(activity, permissions))
                     .setNegativeButton(com.pushizo.sdk.R.string.hs_location_rationale_not_now, (dialog, which) -> resolveLocationRequest())
                     .setOnCancelListener(dialog -> resolveLocationRequest())
@@ -485,16 +589,23 @@ public final class PushizoUnityBridge {
 
     private static void resolveLocationRequest() {
         List<PushizoUnityPermissionCallback> callbacks;
+        List<PushizoUnityPermissionCallback> backgroundCallbacks;
         synchronized (LOCATION_LOCK) {
             if (locationPhase == LOCATION_IDLE) return;
             locationPhase = LOCATION_IDLE;
             locationPausedSinceRequest = false;
             callbacks = new ArrayList<>(LOCATION_CALLBACKS);
             LOCATION_CALLBACKS.clear();
+            backgroundCallbacks = new ArrayList<>(BACKGROUND_LOCATION_CALLBACKS);
+            BACKGROUND_LOCATION_CALLBACKS.clear();
         }
-        // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
+        // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir (bölge izleme açıksa bölgeler yenilenir).
         Pushizo.Location.onPermissionResult();
-        boolean granted = Pushizo.Location.getPermissionGranted();
+        notifyLocationCallbacks(callbacks, Pushizo.Location.getPermissionGranted());
+        notifyLocationCallbacks(backgroundCallbacks, Pushizo.Location.getBackgroundPermissionGranted());
+    }
+
+    private static void notifyLocationCallbacks(List<PushizoUnityPermissionCallback> callbacks, boolean granted) {
         for (PushizoUnityPermissionCallback callback : callbacks) {
             try {
                 callback.onResult(granted);
@@ -777,12 +888,35 @@ public final class PushizoUnityBridge {
         c.run(() -> Pushizo.User.INSTANCE.setPreferences(preferenceInputs(preferencesJson), c));
     }
 
+    /** Reklam kişiselleştirme rızası (ADR-0037): ayrılmış {@code ads_personalization} tercihi; başarı JSON'u getPreferences ile aynı. */
+    public static void setAdsPersonalizationConsent(boolean granted, PushizoUnityCallback callback) {
+        InboxContinuation c = new InboxContinuation(callback, value -> preferencesResultJson((HsPreferencesResult) value).toString());
+        List<HsPreferenceInput> inputs = new ArrayList<>(1);
+        inputs.add(new HsPreferenceInput(HsConsents.ADS_PERSONALIZATION, null, granted));
+        c.run(() -> Pushizo.User.INSTANCE.setPreferences(inputs, c));
+    }
+
+    /** Rıza kayıtları. Başarı JSON'u: {"consents":[{"purpose","granted","source","updatedAt"}]} (zaman epoch ms). */
+    public static void getConsents(PushizoUnityCallback callback) {
+        InboxContinuation c = new InboxContinuation(callback, value -> {
+            JSONArray consents = new JSONArray();
+            for (HsConsent consent : ((HsPreferencesResult) value).getConsents()) {
+                consents.put(object("purpose", consent.getPurpose(), "granted", consent.getGranted(), "source", consent.getSource(),
+                        "updatedAt", consent.getUpdatedAt()));
+            }
+            JSONObject o = new JSONObject();
+            put(o, "consents", consents);
+            return o.toString();
+        });
+        c.run(() -> Pushizo.User.INSTANCE.getPreferences(c));
+    }
+
     // --- Canlı sohbet (ADR-0040; Kotlin suspend fonksiyonları Continuation ile) ---
 
     /**
      * Sohbet çağrıları tek giriş noktasından (.NET MAUI köprüsüyle aynı yöntem adları ve JSON biçimleri). method: start,
      * getConfig, getConversation, getMessages, sendMessage, sendAttachment (base64), markRead, refreshUnreadCount,
-     * getUnreadCount, leaveOfflineMessage, setTyping, startListening, stopListening, attachmentUrl, getVisitorId.
+     * getUnreadCount, leaveOfflineMessage, setTyping, startListening, stopListening, attachmentUrl, getVisitorId, isListening.
      */
     public static void chatCall(String method, String argsJson, PushizoUnityCallback callback) {
         final JSONObject a;
@@ -865,6 +999,9 @@ public final class PushizoUnityBridge {
                     break;
                 case "getVisitorId":
                     callback.onResult(object("visitorId", chat.getVisitorId()).toString(), null, null);
+                    break;
+                case "isListening":
+                    callback.onResult(object("listening", chat.isListening()).toString(), null, null);
                     break;
                 default:
                     callback.onResult(null, "INVALID_ARGUMENT", "bilinmeyen sohbet yöntemi: " + method);

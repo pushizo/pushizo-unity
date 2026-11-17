@@ -45,6 +45,8 @@ namespace PushizoSdk
         public static SessionManager Session { get; } = new SessionManager();
         public static LiveActivitiesManager LiveActivities { get; } = new LiveActivitiesManager();
         public static LocationManager Location { get; } = new LocationManager();
+        /// <summary>Mobil reklam kimliği (ADR-0037; Android ve iOS cihaz derlemeleri).</summary>
+        public static AdsManager Ads { get; } = new AdsManager();
         /// <summary>Android teslimat güçlendirme (ADR-0092; yalnızca Android cihaz derlemesinde etkilidir).</summary>
         public static DeliveryManager Delivery { get; } = new DeliveryManager();
         /// <summary>Özellik bayrakları (ADR-0066).</summary>
@@ -104,6 +106,23 @@ namespace PushizoSdk
                 externalId,
                 string.IsNullOrEmpty(identityHash) ? null : identityHash,
                 string.IsNullOrWhiteSpace(jwt) ? null : jwt));
+        }
+
+        /// <summary>
+        /// Cihazı kullanıcıya bağlar ve <paramref name="profile"/> alanlarını (e-posta, SMS, tag, alias) tek çağrıda ayarlar.
+        /// Kimlik kanıtı diğer <see cref="Login(string, string, string)"/> ile aynıdır. Geçersiz e-posta/telefon/tag/alias
+        /// girişten önce <see cref="ArgumentException"/> verir; kimlik değişimi yarım kalmaz.
+        /// </summary>
+        /// <exception cref="PushizoException">Verilen kanıt app'in kimlik doğrulama kipine uymuyorsa (<c>NOT_READY</c>).</exception>
+        public static void Login(string externalId, PushizoUserProfile profile, string? identityHash = null, string? jwt = null)
+        {
+            if (string.IsNullOrWhiteSpace(externalId)) throw new ArgumentException("externalId gerekli.", nameof(externalId));
+            var profileJson = BridgeJson.ProfileToJson(profile);
+            var hash = string.IsNullOrEmpty(identityHash) ? null : identityHash;
+            var token = string.IsNullOrWhiteSpace(jwt) ? null : jwt;
+            ThrowIfFailed(profileJson is null
+                ? Bridge().Login(externalId, hash, token)
+                : Bridge().LoginWithProfile(externalId, profileJson, hash, token));
         }
 
         /// <summary>

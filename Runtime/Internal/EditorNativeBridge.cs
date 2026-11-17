@@ -40,6 +40,22 @@ namespace PushizoSdk.Internal
             return null;
         }
 
+        public string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt)
+        {
+            var profile = Json.ParseObject(profileJson);
+            lock (_gate)
+            {
+                _externalId = externalId;
+                if (profile.TryGetValue("email", out var email) && email is string e && !_emails.Contains(e)) _emails.Add(e);
+                if (profile.TryGetValue("sms", out var sms) && sms is string s && !_sms.Contains(s)) _sms.Add(s);
+                if (profile.TryGetValue("tags", out var tags) && tags is Dictionary<string, object?> t)
+                    foreach (var pair in t)
+                        if (pair.Value is string value) _tags[pair.Key] = value;
+            }
+            Log("Login");
+            return null;
+        }
+
         public string? UpdateUserJwt(string jwt)
         {
             lock (_gate)
@@ -128,6 +144,12 @@ namespace PushizoSdk.Internal
             Log("RemoveSms");
         }
 
+        public string? RegisterAdm(string token)
+        {
+            Log("RegisterAdm");
+            return null;
+        }
+
         public string GetEmails()
         {
             lock (_gate) return BridgeJson.ToJson(_emails);
@@ -157,6 +179,8 @@ namespace PushizoSdk.Internal
         public void RemoveNotification(string id) => Log("RemoveNotification");
 
         public void RemoveGroupedNotifications(string group) => Log("RemoveGroupedNotifications");
+
+        public void SetBadgeCount(int count) => Log("SetBadgeCount");
 
         public void SetForegroundHandlerEnabled(bool enabled)
         {
@@ -226,7 +250,12 @@ namespace PushizoSdk.Internal
 
         public void ContentCardEvent(string id, string eventName, NativeResult result) => NotSupported(result);
 
-        public void ChatCall(string method, string argsJson, NativeResult result) => NotSupported(result, "Canlı sohbet");
+        /// <summary>Editor'de sohbet yoktur: dinleme durumu false, diğer çağrılar <c>PLATFORM_NOT_SUPPORTED</c>.</summary>
+        public void ChatCall(string method, string argsJson, NativeResult result)
+        {
+            if (method == "isListening") result(@"{""listening"":false}", null, null);
+            else NotSupported(result, "Canlı sohbet");
+        }
 
         public void GetPreferences(NativeResult result)
         {
@@ -239,6 +268,20 @@ namespace PushizoSdk.Internal
             Log("SetPreferences");
             NotSupported(result, "Tercihler");
         }
+
+        public void SetAdsPersonalizationConsent(bool granted, NativeResult result)
+        {
+            Log("SetAdsPersonalizationConsent");
+            NotSupported(result, "Tercihler");
+        }
+
+        public void GetConsents(NativeResult result)
+        {
+            Log("GetConsents");
+            NotSupported(result, "Tercihler");
+        }
+
+        public void SetAdvertisingId(string? id) => Log("Ads.SetAdvertisingId");
 
         public void SendEvent(string name, string propertiesJson, double value, bool hasValue) => Log("SendEvent");
 
@@ -269,6 +312,17 @@ namespace PushizoSdk.Internal
         public void RequestLocationPermission(string? rationale, Action<bool> completion)
         {
             Log("Location.RequestPermission");
+            completion(false);
+        }
+
+        /// <summary>Editor'de konum izni yoktur.</summary>
+        public bool GetLocationPermissionGranted() => false;
+
+        public bool GetLocationBackgroundPermissionGranted() => false;
+
+        public void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion)
+        {
+            Log("Location.RequestBackgroundPermission");
             completion(false);
         }
 
