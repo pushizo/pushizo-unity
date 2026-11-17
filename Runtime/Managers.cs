@@ -70,6 +70,19 @@ namespace PushizoSdk
             Pushizo.Bridge().SetLanguage(languageCode.Trim());
         }
 
+        /// <summary>
+        /// Kullanıcı özelliği yazar (ör. <c>SetProperty("plan", "pro")</c>); <c>null</c> özelliği siler. Değer metin, sayı,
+        /// bool, tarih, Guid, enum, liste veya sözlük olabilir (liste ve sözlük içinde null olamaz). Anahtar 1-64
+        /// karakterdir. Çevrimdışıyken yerel kuyrukta bekler; geçersiz anahtar ya da değerde <see cref="ArgumentException"/>.
+        /// </summary>
+        public void SetProperty(string key, object? value)
+        {
+            var name = Validation.RequirePropertyKey(key, nameof(key));
+            var json = Json.Serialize(new Dictionary<string, object?> { ["value"] = EventProperties.NormalizeUserProperty(value, nameof(value)) });
+            var error = Pushizo.Bridge().SetUserProperty(name, json);
+            if (error != null) throw new ArgumentException(error, nameof(key));
+        }
+
         /// <summary>E-posta aboneliği ekler (küçük harfe çevrilir); geçersiz adreste <see cref="ArgumentException"/>.</summary>
         public void AddEmail(string email) => Pushizo.Bridge().AddEmail(Validation.RequireEmail(email, nameof(email)));
 
@@ -325,17 +338,32 @@ namespace PushizoSdk
         }
 
         /// <summary>
-        /// Uygulama rozetini ayarlar (iOS; bildirim servis uzantısıyla paylaşılan sayaç da eşitlenir). Android'de rozet
-        /// görünen bildirimlerden hesaplandığı için çağrı etkisizdir. Negatif değerde <see cref="ArgumentOutOfRangeException"/>.
+        /// Rozet sayısını ayarlar. iOS: uygulama rozeti (bildirim servis uzantısıyla paylaşılan sayaç da eşitlenir).
+        /// Android: başlatıcı rozeti bildirimlerden üretildiği için yerel SDK sayıyı saklar ve bundan sonra gösterdiği
+        /// bildirimlere yazar (sayı gösteren başlatıcılar, Android 8+); tepside bildirim yokken rozet görünmez. Sonucu
+        /// öğrenmek için <see cref="TrySetBadgeCount"/>. Negatif değerde <see cref="ArgumentOutOfRangeException"/>.
         /// </summary>
-        public void SetBadgeCount(int count)
+        public void SetBadgeCount(int count) => TrySetBadgeCount(count);
+
+        /// <summary>
+        /// <see cref="SetBadgeCount"/> ile aynı işi yapar ve sonucu döndürür. Android: sayı saklandı ve rozet bu cihazda
+        /// gösterilebiliyorsa true; Android 8 öncesinde, bildirimler kapalıyken veya kanal rozeti kapatıldıysa false (sayı
+        /// yine saklanır). iOS: true. Editor: false.
+        /// </summary>
+        public bool TrySetBadgeCount(int count)
         {
             if (count < 0) throw new ArgumentOutOfRangeException(nameof(count), "Rozet sayısı negatif olamaz.");
-            Pushizo.Bridge().SetBadgeCount(count);
+            return Pushizo.Bridge().SetBadgeCount(count);
         }
 
-        /// <summary>Rozeti sıfırlar (iOS; Android'de etkisiz).</summary>
+        /// <summary>Rozeti sıfırlar (iOS uygulama rozeti; Android'de saklanan sayı).</summary>
         public void ClearBadge() => Pushizo.Bridge().SetBadgeCount(0);
+
+        /// <summary>
+        /// Android'de <see cref="SetBadgeCount"/> ile saklanan son sayı. iOS'ta yerel SDK rozet sayısını okumaya açmadığı
+        /// için, Editor'de ve başlatılmadan önce 0.
+        /// </summary>
+        public int BadgeCount => Pushizo.BridgeOrNull()?.GetBadgeCount() ?? 0;
 
         internal void DispatchClicked(NotificationClickedEventArgs args)
         {
@@ -469,6 +497,17 @@ namespace PushizoSdk
         {
         }
 
+        /// <summary>
+        /// Kutu değişti (yerel <c>Inbox.addObserver</c>; ana iş parçacığında). Okundu, tümü okundu ve arşivleme her
+        /// işlemde; listeleme ve sayım yalnızca okunmamış sayısı değiştiğinde bildirilir. Rozet güncellemek için kullanılır.
+        /// Editor'de olay üretilmez.
+        /// </summary>
+        public event Action<InboxChangedEventArgs>? Changed;
+
+        internal void DispatchChanged(InboxChangedEventArgs args) => Pushizo.Raise(Changed, args, "Inbox.Changed");
+
+        internal void Reset() => Changed = null;
+
         /// <summary>Öğeler (yeniden eskiye), okunmamış sayısı ve sonraki sayfa imleci (<paramref name="limit"/> 1-200).</summary>
         public Task<InboxPage> ListAsync(int limit = 50, string? cursor = null)
         {
@@ -564,13 +603,24 @@ namespace PushizoSdk
         /// Özel olay / outcome gönderir (çevrimdışıyken kuyrukta bekler); olay adı in-app tetiklerini de çalıştırır.
         /// Özellikler: metin, sayı, bool, tarih, Guid, enum, iç içe sözlük ve liste (en fazla 16 seviye).
         /// </summary>
-        public void SendEvent(string name, IReadOnlyDictionary<string, object?>? properties = null, double? value = null)
+        public void SendEvent(string name, IReadOnlyDictionary<string, object?>? properties = null, double? value = null) =>
+            Send(name, properties, value, null);
+
+        /// <summary>
+        /// Olayı tekilleştirme kimliğiyle gönderir: reklam pikseli ya da Conversions API ile aynı <paramref name="eventId"/>
+        /// verilirse sunucu olayı bir kez kaydeder (ADR-0038). Kimlik 8-64 karakterdir (harf, rakam ve <c>. _ : -</c>);
+        /// boşsa ya da biçim geçersizse yerel SDK kendi kimliğini üretir.
+        /// </summary>
+        public void SendEvent(string name, IReadOnlyDictionary<string, object?>? properties, double? value, string? eventId) =>
+            Send(name, properties, value, string.IsNullOrWhiteSpace(eventId) ? null : eventId!.Trim());
+
+        private static void Send(string name, IReadOnlyDictionary<string, object?>? properties, double? value, string? eventId)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Olay adı gerekli.", nameof(name));
             if (value is double v && (double.IsNaN(v) || double.IsInfinity(v)))
                 throw new ArgumentException("Olay değeri sonlu bir sayı olmalı.", nameof(value));
             var json = Json.Serialize(EventProperties.Normalize(properties, nameof(properties)));
-            Pushizo.Bridge().SendEvent(name.Trim(), json, value ?? 0d, value.HasValue);
+            Pushizo.Bridge().SendEvent(name.Trim(), json, value ?? 0d, value.HasValue, eventId);
         }
     }
 
@@ -811,6 +861,17 @@ namespace PushizoSdk
         internal FeatureFlagsManager()
         {
         }
+
+        /// <summary>
+        /// Bayrak değerleri sunucudan başarıyla yenilendi (yerel <c>FeatureFlags.addObserver</c>; oturum başında ve
+        /// <see cref="RefreshAsync"/> sonrasında, ana iş parçacığında). Güncel değerler <see cref="IsEnabled"/> ve
+        /// <see cref="GetValue"/> ile okunur. Editor'de olay üretilmez.
+        /// </summary>
+        public event Action? Changed;
+
+        internal void DispatchChanged() => Pushizo.Raise(Changed, "FeatureFlags.Changed");
+
+        internal void Reset() => Changed = null;
 
         /// <summary>
         /// Değerleri hemen yeniler; sonuç (ana iş parçacığında) değerlerin güncellenip güncellenmediğidir. Hata son

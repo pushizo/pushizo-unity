@@ -80,7 +80,46 @@ namespace PushizoSdk.Tests
             return RegisterAdmError;
         }
 
-        public void SetBadgeCount(int count) => Record("badge:" + count);
+        /// <summary>Yerel rozet sonucu (Android: rozet gösterilebiliyor mu) ve saklanan sayı.</summary>
+        public bool BadgeResult { get; set; } = true;
+        public int BadgeCountValue { get; private set; }
+
+        public bool SetBadgeCount(int count)
+        {
+            Record("badge:" + count);
+            BadgeCountValue = count;
+            return BadgeResult;
+        }
+
+        public int GetBadgeCount() => BadgeCountValue;
+
+        /// <summary>SetUserProperty yanıtı (yerel SDK'nın anahtar hatası; null = başarı).</summary>
+        public string? UserPropertyError { get; set; }
+
+        public string? SetUserProperty(string key, string valueJson)
+        {
+            Record("setUserProperty:" + key + ":" + valueJson);
+            return UserPropertyError;
+        }
+
+        /// <summary>Hazır sohbet ekranı açık mı (Show/Hide ile değişir).</summary>
+        public bool ChatPresented { get; private set; }
+
+        public void ChatShow()
+        {
+            Record("chatShow");
+            ChatPresented = true;
+        }
+
+        public bool ChatHide()
+        {
+            Record("chatHide");
+            var was = ChatPresented;
+            ChatPresented = false;
+            return was;
+        }
+
+        public bool ChatIsPresented() => ChatPresented;
 
         public void SetAdvertisingId(string? id) => Record("advertisingId:" + (id ?? "<null>"));
 
@@ -185,11 +224,14 @@ namespace PushizoSdk.Tests
         public void GetPreferences(NativeResult result) => RespondPreferences("getPreferences", result);
         public void SetPreferences(string preferencesJson, NativeResult result) => RespondPreferences("setPreferences:" + preferencesJson, result);
 
-        public void SendEvent(string name, string propertiesJson, double value, bool hasValue)
+        public string? LastEventId { get; private set; }
+
+        public void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId)
         {
             Record("sendEvent:" + name);
             LastEventJson = propertiesJson;
             LastEventHasValue = hasValue;
+            LastEventId = eventId;
         }
 
         /// <summary>false: Android köprüsü gibi Live Activities desteklenmez.</summary>

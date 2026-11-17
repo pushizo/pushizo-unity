@@ -252,7 +252,8 @@ geri çekilme + `after_seq` yoklaması) ve push ile gelen temsilci mesajları (`
 `start` sonrası login/logout ve push aboneliği değişince bağlama yerel SDK'da yenilenir, logout ziyaretçiyi sıfırlar.
 Mesajlar `seq` ile sıralanır; ağ yokken gönderilen mesaj `pending` döner ve gönderilince olayla sunucu kopyası gelir.
 Ayrıntı: [android rehberi](https://docs.pushizo.com/docs/sdk/android) / [ios rehberi](https://docs.pushizo.com/docs/sdk/ios) → "Canlı sohbet".
-Editor'de çağrılar `PushizoException` (`PLATFORM_NOT_SUPPORTED`) ile sonuçlanır.
+Editor'de çağrılar `PushizoException` (`PLATFORM_NOT_SUPPORTED`) ile sonuçlanır. Hazır sohbet ekranı için
+`Pushizo.Chat.Show()` (bkz. "Kullanıcı özelliği, olay kimliği, gözlemciler ve hazır sohbet ekranı").
 
 ### Konum
 
@@ -358,7 +359,7 @@ UserPreferences prefs = await Pushizo.User.SetAdsPersonalizationConsentAsync(tru
 IReadOnlyList<UserConsent> consents = await Pushizo.User.GetConsentsAsync(); // Purpose, Granted, Source, UpdatedAt
 Pushizo.Ads.SetAdvertisingId(advertisingId);   // null: sunucudaki kayıt silinir
 
-Pushizo.Notifications.SetBadgeCount(3);        // iOS rozeti; Android'de etkisiz
+Pushizo.Notifications.SetBadgeCount(3);        // iOS rozeti; Android'de saklanır, sonraki bildirimlere yazılır
 Pushizo.Notifications.ClearBadge();
 
 // Konum izin durumu ve arka plan ("her zaman") izni: bölge izleme için.
@@ -377,8 +378,56 @@ Pushizo.User.RegisterAdm(admRegistrationId);   // Fire OS ADM; iOS'ta etkisiz
 - Rıza çağrıları tercih ucunu kullanır: kayıtlı abonelik gerekir (yoksa `NOT_READY`), Editor'de `PLATFORM_NOT_SUPPORTED` döner.
 - Reklam kimliğini SDK okumaz (reklam kitaplığı ve ATT istemi içermez); kimlik yalnızca `ads_personalization` rızası olan
   kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir.
-- Tek platformlu çağrılar diğer platformda ve Editor'de etkisizdir, istisna atmaz: rozet Android'de (rozet görünen
-  bildirimlerden hesaplanır), `RegisterAdm` iOS'ta; Editor'de izin durumları ve `IsListeningAsync` `false` döner.
+- Tek platformlu çağrılar diğer platformda ve Editor'de etkisizdir, istisna atmaz: `RegisterAdm` iOS'ta; Editor'de rozet
+  etkisizdir, izin durumları ve `IsListeningAsync` `false` döner.
+
+### Kullanıcı özelliği, olay kimliği, gözlemciler ve hazır sohbet ekranı
+
+```csharp
+// Kullanıcı özelliği: metin, sayı, bool, liste veya sözlük; null özelliği siler.
+Pushizo.User.SetProperty("plan", "pro");
+Pushizo.User.SetProperty("favorites", new List<object> { "sword", "shield" });
+Pushizo.User.SetProperty("plan", null);
+
+// Olay kimliği: reklam pikseliyle aynı kimlik verilirse sunucu olayı bir kez kaydeder.
+Pushizo.Session.SendEvent("purchase", new Dictionary<string, object> { ["sku"] = "gems_100" }, 4.99, "order-2026-0001");
+
+// Gözlemciler (ana iş parçacığında).
+Pushizo.FeatureFlags.Changed += () => ApplyFlags();                    // değerler sunucudan yenilendi
+Pushizo.Inbox.Changed += e => SetBadge(e.UnreadCount);                 // e.Type, e.ItemId, e.UnreadCount
+
+// Rozet: Android'de sayı saklanır ve sonraki bildirimlere yazılır.
+bool shown = Pushizo.Notifications.TrySetBadgeCount(3);                // rozet bu cihazda gösterilebiliyor mu
+int stored = Pushizo.Notifications.BadgeCount;                         // Android'de saklanan sayı; iOS'ta 0
+
+// Hazır sohbet ekranı (oyunun üzerinde yerel arayüz).
+Pushizo.Chat.Show();
+bool open = Pushizo.Chat.IsPresented;
+bool closed = Pushizo.Chat.Hide();                                     // açık ekran kapatıldıysa true
+```
+
+- `SetProperty` anahtarı 1-64 karakterdir; değer metin, sayı, bool, tarih, Guid, enum, liste veya sözlük olabilir
+  (liste ve sözlük içinde `null` olamaz). Geçersiz anahtar ya da değer köprüye gitmeden `ArgumentException` verir;
+  işlem çevrimdışıyken yerel kuyrukta bekler.
+- `SendEvent(name, properties, value, eventId)` mevcut üç parametreli çağrının yanına eklenen aşırı yüklemedir. Kimlik
+  8-64 karakterdir (harf, rakam ve `. _ : -`); boşsa ya da biçim geçersizse yerel SDK kendi kimliğini üretir.
+- `FeatureFlags.Changed` oturum başındaki ve `RefreshAsync` sonrasındaki başarılı yenilemede tetiklenir.
+  `Inbox.Changed` türleri `InboxChangeType`: `Listed`, `Read`, `ReadAll`, `Archived`, `Count`; okundu, tümü okundu ve
+  arşivleme her işlemde, listeleme ve sayım yalnızca okunmamış sayısı değiştiğinde bildirilir. `ItemId` yalnızca
+  `Read` ve `Archived` olaylarında doludur.
+- Rozet artık Android'de de yerel SDK'ya bağlıdır: başlatıcı rozeti bildirimlerden üretildiği için sayı saklanır ve
+  sonraki bildirimlere yazılır (Android 8 ve sonrası; tepside bildirim yokken rozet görünmez). `TrySetBadgeCount`
+  Android'de rozet gösterilemiyorsa (Android 8 öncesi, bildirimler ya da kanal rozeti kapalı) `false`, iOS'ta `true`
+  döner; `SetBadgeCount` aynı işi sonuç döndürmeden yapar. `BadgeCount` Android'de saklanan sayıdır; yerel iOS SDK'sı
+  rozeti okumaya açmadığı için iOS'ta `0` döner.
+- `Chat.Show()` Android'de `HsChatActivity` etkinliğini, iOS'ta modal `HSChatViewController` ekranını açar; ekran
+  açıkken yeniden çağrı ikinci bir ekran açmaz. `IsPresented` iOS'ta yerel değerdir; Android'de yerel SDK bu durumu
+  dışa açmadığı için köprü sohbet etkinliğinin yaşam döngüsünü izler. Kendi arayüzünüzü çizmek için `Chat` veri
+  çağrılarını kullanın.
+- iOS'ta profille giriş ve konum izni durumu artık yerel SDK çağrılarıdır (`Pushizo.login(_:profile:…)`,
+  `Pushizo.Location.permissionGranted`); C# davranışı ve hata biçimi aynıdır.
+- Editor'de bu çağrılar istisna atmaz: `SetProperty`, `SendEvent` ve `Chat.Show` günlüğe yazılır, `TrySetBadgeCount`,
+  `Chat.Hide` ve `IsPresented` `false`, `BadgeCount` `0` döner, gözlemci olayları üretilmez.
 
 ### Özellik bayrakları
 
@@ -434,7 +483,8 @@ Pushizo (C#: doğrulama, JSON sözleşmesi, ana iş parçacığı dağıtıcıs�
 Köprüler yalnızca metin (JSON), sayı, bool ve geri çağrı taşır; JSON biçimleri .NET MAUI köprüsüyle aynıdır.
 Android köprüsü Java'dır (Unity Gradle derlemesinde Kotlin eklentisi gerekmez); Kotlin SDK'nın `suspend` bildirim
 kutusu fonksiyonları `Continuation` ile çağrılır. İzin değişiklikleri yerel SDK izin gözlemcisinden
-(`Pushizo.Notifications.PermissionObserver` / Swift `addPermissionObserver`) `permission` olayı olarak gelir.
+(`Pushizo.Notifications.PermissionObserver` / Swift `addPermissionObserver`) `permission` olayı olarak gelir. Bayrak
+ve kutu gözlemcileri (`FeatureFlags.addObserver`, `Inbox.addObserver`) `featureFlags` ve `inbox` olaylarını üretir.
 
 ## Testler
 

@@ -30,6 +30,9 @@ import com.pushizo.sdk.HsChatIdentifyResult;
 import com.pushizo.sdk.HsChatMessage;
 import com.pushizo.sdk.HsChatMessagePage;
 import com.pushizo.sdk.PushizoChat;
+import com.pushizo.sdk.HsChatActivity;
+import com.pushizo.sdk.HsFeatureFlagObserver;
+import com.pushizo.sdk.HsInboxObserver;
 import com.pushizo.sdk.HsForegroundEvent;
 import com.pushizo.sdk.HsInAppLifecycleEvent;
 import com.pushizo.sdk.HsInAppLifecycleListener;
@@ -121,6 +124,9 @@ public final class PushizoUnityBridge {
     /** Arka plan konum izni bekleyenler: aynı akışı paylaşır, sonuç olarak arka plan izin durumunu alır. */
     private static final List<PushizoUnityPermissionCallback> BACKGROUND_LOCATION_CALLBACKS = new ArrayList<>();
 
+    /** Açık hazır sohbet ekranı (yerel SDK ekranın açık olup olmadığını dışa açmaz; etkinlik yaşam döngüsünden izlenir). */
+    private static volatile WeakReference<Activity> chatActivity;
+
     private PushizoUnityBridge() {
     }
 
@@ -168,11 +174,20 @@ public final class PushizoUnityBridge {
             if (resolveLocation) resolveLocationRequest();
         }
 
-        @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
+        @Override
+        public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+            if (activity instanceof HsChatActivity) chatActivity = new WeakReference<>(activity);
+        }
+
+        @Override
+        public void onActivityDestroyed(Activity activity) {
+            WeakReference<Activity> ref = chatActivity;
+            if (ref != null && ref.get() == activity) chatActivity = null;
+        }
+
         @Override public void onActivityStarted(Activity activity) { }
         @Override public void onActivityStopped(Activity activity) { }
         @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
-        @Override public void onActivityDestroyed(Activity activity) { }
     };
 
     /**
@@ -181,6 +196,13 @@ public final class PushizoUnityBridge {
      */
     private static final Pushizo.Notifications.PermissionObserver PERMISSION_OBSERVER =
             granted -> emit("permission", object("permission", granted));
+
+    /** Yerel bayrak gözlemcisi → {@code featureFlags} olayı ({@code {}}): değerler sunucudan başarıyla yenilendiğinde. */
+    private static final HsFeatureFlagObserver FEATURE_FLAG_OBSERVER = () -> emit("featureFlags", new JSONObject());
+
+    /** Yerel kutu gözlemcisi → {@code inbox} olayı ({@code {"type","itemId","unreadCount"}}). */
+    private static final HsInboxObserver INBOX_OBSERVER = event ->
+            emit("inbox", object("type", event.getType(), "itemId", event.getItemId(), "unreadCount", event.getUnreadCount()));
 
     // --- Başlatma ---
 
@@ -226,6 +248,8 @@ public final class PushizoUnityBridge {
                 return Unit.INSTANCE;
             }));
             Pushizo.Chat.addOpenListener(info -> emit("chatOpen", new JSONObject(info.toMap())));
+            Pushizo.FeatureFlags.addObserver(FEATURE_FLAG_OBSERVER);
+            Pushizo.Inbox.addObserver(INBOX_OBSERVER);
             // En son: uygulamayı açan (bekleyen) tıklama bu çağrıda iletilir.
             Pushizo.Notifications.addClickListener(event -> {
                 JSONObject payload = object("actionId", event.getActionId(), "url", event.getUrl());
@@ -304,6 +328,19 @@ public final class PushizoUnityBridge {
     public static void removeAlias(String label) { Pushizo.User.removeAlias(label); }
 
     public static void setLanguage(String code) { Pushizo.User.setLanguage(code); }
+
+    /**
+     * Kullanıcı özelliği (yerel {@code Pushizo.User.setProperty}). valueJson: {"value":…}; metin, sayı, mantıksal, dizi
+     * veya nesne, JSON null özelliği siler. Yerel SDK anahtarı reddederse hata mesajı, başarıda null.
+     */
+    public static String setUserProperty(String key, String valueJson) {
+        try {
+            Pushizo.User.setProperty(key, toValue(parseObject(valueJson).opt("value")));
+            return null;
+        } catch (IllegalArgumentException e) {
+            return e.getMessage() != null ? e.getMessage() : "Geçersiz kullanıcı özelliği";
+        }
+    }
 
     public static void addEmail(String email) { Pushizo.User.addEmail(email); }
 
@@ -437,6 +474,15 @@ public final class PushizoUnityBridge {
     public static void removeGroupedNotifications(String group) {
         Pushizo.Notifications.removeGroupedNotifications(group);
     }
+
+    /**
+     * Rozet sayısını saklar; yerel SDK sayıyı sonraki bildirimlere yazar. Sonuç: rozet bu cihazda gösterilebiliyor mu
+     * (Android 8+, bildirimler açık, kanal rozeti açık).
+     */
+    public static boolean setBadgeCount(int count) { return Pushizo.Notifications.setBadgeCount(count); }
+
+    /** setBadgeCount ile saklanan son sayı. */
+    public static int badgeCount() { return Pushizo.Notifications.INSTANCE.getBadgeCount(); }
 
     // --- Konum (v2 Faz 17b; yalnızca ön plan) ---
 
@@ -1015,6 +1061,19 @@ public final class PushizoUnityBridge {
         }
     }
 
+    /** Hazır sohbet ekranını (HsChatActivity) Unity etkinliğinin üzerinde açar; ekran açıksa öne getirilir. */
+    public static void chatShow(Activity activity) { PushizoChat.show(activity); }
+
+    /** Hazır sohbet ekranını kapatır; açık ekran varsa true. */
+    public static boolean chatHide() { return PushizoChat.hide(); }
+
+    /** Hazır sohbet ekranı açık mı (oluşturulmuş, kapanmakta olmayan HsChatActivity). */
+    public static boolean chatIsPresented() {
+        WeakReference<Activity> ref = chatActivity;
+        Activity activity = ref != null ? ref.get() : null;
+        return activity != null && !activity.isFinishing() && !activity.isDestroyed();
+    }
+
     /** Sohbet modelinin camelCase sözlüğü (Kotlin `toMap()`). */
     private static Map<String, Object> chatMap(Object value) {
         if (value instanceof HsChatMessage) return ((HsChatMessage) value).toMap();
@@ -1038,9 +1097,16 @@ public final class PushizoUnityBridge {
 
     // --- Oturum ---
 
-    /** propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue false ise değer gönderilmez. */
-    public static void sendEvent(String name, String propertiesJson, double value, boolean hasValue) {
-        Pushizo.Session.sendEvent(name, toMap(parseObject(propertiesJson)), hasValue ? Double.valueOf(value) : null);
+    /**
+     * propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue false ise değer gönderilmez. eventId boş
+     * değilse tekilleştirme kimliği olarak yerel SDK'ya verilir (biçim geçersizse SDK kendi kimliğini üretir).
+     */
+    public static void sendEvent(String name, String propertiesJson, double value, boolean hasValue, String eventId) {
+        Map<String, Object> properties = toMap(parseObject(propertiesJson));
+        Double amount = hasValue ? Double.valueOf(value) : null;
+        String id = emptyToNull(eventId);
+        if (id == null) Pushizo.Session.sendEvent(name, properties, amount);
+        else Pushizo.Session.sendEvent(name, properties, amount, id);
     }
 
     // --- Yardımcılar ---

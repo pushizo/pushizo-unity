@@ -2,14 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using PushizoSdk.Internal;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace PushizoSdk.Tests
 {
     /// <summary>
     /// Yerel SDK eşitliği: profille giriş, reklam rızası ve kimliği, rozet, konum izin durumları, arka plan konum izni, ADM
-    /// kaydı ve sohbet dinleme durumu.
+    /// kaydı, sohbet dinleme durumu; kullanıcı özelliği, olay kimliği, bayrak ve kutu gözlemcileri, hazır sohbet ekranı.
     /// </summary>
     public sealed class NativeParityTests
     {
@@ -219,25 +222,281 @@ namespace PushizoSdk.Tests
             StringAssert.Contains("chat.isListening()", java);
 
             var swift = PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift");
-            StringAssert.Contains("HSContacts.normalizeEmail(email) == nil", swift);
-            StringAssert.Contains("HSContacts.normalizePhone(sms) == nil", swift);
+            // Profille giriş yerel çağrıdır; profil ve kanıt doğrulaması (girişten önce) yerel SDK'dadır.
+            StringAssert.Contains("try Pushizo.login(id, profile: profile, identityHash: hsuNonEmpty(identityHash), jwt: hsuNonEmpty(jwt))", swift);
+            StringAssert.Contains("catch HSError.invalidArgument(let message)", swift);
+            StringAssert.DoesNotContain("HSContacts.normalize", swift);
             StringAssert.Contains("Pushizo.User.setAdsPersonalizationConsent(value)", swift);
             StringAssert.Contains("Pushizo.User.getConsents()", swift);
             StringAssert.Contains("Pushizo.Ads.setAdvertisingId(hsuNonEmpty(id))", swift);
             StringAssert.Contains("Pushizo.Notifications.setBadgeCount(", swift);
             StringAssert.Contains("Pushizo.Location.requestAlwaysPermission", swift);
-            StringAssert.Contains("CLLocationManager().authorizationStatus", swift);
+            // Konum izin durumu yerel API'den okunur; köprü kendi CLLocationManager'ını kullanmaz.
+            StringAssert.Contains("Pushizo.Location.permissionGranted ? 1 : 0", swift);
+            StringAssert.Contains("Pushizo.Location.backgroundPermissionGranted ? 1 : 0", swift);
+            StringAssert.DoesNotContain("CLLocationManager", swift);
+            StringAssert.DoesNotContain("import CoreLocation", swift);
             StringAssert.Contains("Pushizo.Chat.isListening", swift);
-            // Profil doğrulaması girişten önce yapılır (Android ile aynı sıra).
-            var loginWithProfile = swift.Substring(swift.IndexOf("func hs_login_with_profile", StringComparison.Ordinal));
-            Assert.Less(loginWithProfile.IndexOf("HSContacts.normalizeEmail", StringComparison.Ordinal),
-                loginWithProfile.IndexOf("Pushizo.login(id", StringComparison.Ordinal));
 
             // Tek platformlu API'ler diğer platformda yerel çağrı yapmaz.
             var ios = PackageFile("Runtime/Internal/IosNativeBridge.cs");
             StringAssert.Contains("public string? RegisterAdm(string token) => null;", ios);
+            // Rozet Android'de yerel çağrıya bağlıdır.
             var android = PackageFile("Runtime/Internal/AndroidNativeBridge.cs");
-            StringAssert.DoesNotContain("\"setBadgeCount\"", android);
+            StringAssert.Contains("Call<bool>(\"setBadgeCount\", count)", android);
+            StringAssert.Contains("Pushizo.Notifications.setBadgeCount(count)", java);
+            StringAssert.Contains("Pushizo.Notifications.INSTANCE.getBadgeCount()", java);
+        }
+
+        [Test]
+        public void User_set_property_validates_and_serializes_the_value()
+        {
+            Assert.Throws<InvalidOperationException>(() => Pushizo.User.SetProperty("plan", "pro"));
+            Init();
+
+            Pushizo.User.SetProperty(" plan ", "pro");
+            Assert.AreEqual(@"setUserProperty:plan:{""value"":""pro""}", LastCall);
+            Pushizo.User.SetProperty("level", 12);
+            Assert.AreEqual(@"setUserProperty:level:{""value"":12}", LastCall);
+            Pushizo.User.SetProperty("vip", true);
+            Assert.AreEqual(@"setUserProperty:vip:{""value"":true}", LastCall);
+            Pushizo.User.SetProperty("score", 4.5);
+            Assert.AreEqual(@"setUserProperty:score:{""value"":4.5}", LastCall);
+            // null özelliği siler.
+            Pushizo.User.SetProperty("plan", null);
+            Assert.AreEqual(@"setUserProperty:plan:{""value"":null}", LastCall);
+
+            Pushizo.User.SetProperty("prefs", new Dictionary<string, object?>
+            {
+                ["tags"] = new List<object?> { "a", 2L, false },
+                ["nested"] = new Dictionary<string, object?> { ["k"] = "v" },
+            });
+            var json = LastCall.Substring("setUserProperty:prefs:".Length);
+            var value = (Dictionary<string, object?>)Json.ParseObject(json)["value"]!;
+            CollectionAssert.AreEqual(new object?[] { "a", 2L, false }, (List<object?>)value["tags"]!);
+            Assert.AreEqual("v", ((Dictionary<string, object?>)value["nested"]!)["k"]);
+
+            // Geçersiz anahtar/değer köprüye gitmez.
+            var before = _bridge.Calls.Count;
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty(" ", "x"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty(null!, "x"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty(new string('k', 65), "x"));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty("o", new object()));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty("n", double.NaN));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty("l", new List<object?> { "a", null }));
+            Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty("m", new Dictionary<string, object?> { ["k"] = null }));
+            Assert.AreEqual(before, _bridge.Calls.Count);
+            Pushizo.User.SetProperty(new string('k', 64), "x");
+            Assert.AreEqual(before + 1, _bridge.Calls.Count);
+
+            // Yerel SDK'nın anahtar hatası ArgumentException olur.
+            _bridge.UserPropertyError = "Özellik anahtarı boş olamaz.";
+            var failed = Assert.Throws<ArgumentException>(() => Pushizo.User.SetProperty("plan", "pro"));
+            StringAssert.Contains("Özellik anahtarı boş olamaz.", failed!.Message);
+        }
+
+        [Test]
+        public void Send_event_forwards_optional_event_id_and_keeps_existing_signature()
+        {
+            Init();
+            var props = new Dictionary<string, object?> { ["sku"] = "gems_100" };
+
+            Pushizo.Session.SendEvent("purchase", props, 4.99);
+            Assert.AreEqual("sendEvent:purchase", LastCall);
+            Assert.IsNull(_bridge.LastEventId);
+            Assert.IsTrue(_bridge.LastEventHasValue);
+
+            Pushizo.Session.SendEvent("purchase", props, 4.99, " order-2026-0001 ");
+            Assert.AreEqual("order-2026-0001", _bridge.LastEventId);
+            Assert.AreEqual(@"{""sku"":""gems_100""}", _bridge.LastEventJson);
+
+            Pushizo.Session.SendEvent("opened", null, null, "evt_12345678");
+            Assert.AreEqual("evt_12345678", _bridge.LastEventId);
+            Assert.IsFalse(_bridge.LastEventHasValue);
+
+            // Boş kimlik yok sayılır; biçim denetimi yerel SDK'dadır (geçersizse kendi kimliğini üretir).
+            Pushizo.Session.SendEvent("opened", null, null, "  ");
+            Assert.IsNull(_bridge.LastEventId);
+            Pushizo.Session.SendEvent("opened", null, null, null);
+            Assert.IsNull(_bridge.LastEventId);
+            Pushizo.Session.SendEvent("opened", null, null, "kısa");
+            Assert.AreEqual("kısa", _bridge.LastEventId);
+
+            Assert.Throws<ArgumentException>(() => Pushizo.Session.SendEvent(" ", null, null, "evt_12345678"));
+            Assert.Throws<ArgumentException>(() => Pushizo.Session.SendEvent("x", null, double.NaN, "evt_12345678"));
+        }
+
+        [Test]
+        public void Badge_result_and_stored_count_come_from_the_native_sdk()
+        {
+            Assert.AreEqual(0, Pushizo.Notifications.BadgeCount);
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Notifications.TrySetBadgeCount(1));
+            Init();
+
+            Assert.IsTrue(Pushizo.Notifications.TrySetBadgeCount(5));
+            Assert.AreEqual("badge:5", LastCall);
+            Assert.AreEqual(5, Pushizo.Notifications.BadgeCount);
+
+            // Android: rozet gösterilemiyor (bildirimler kapalı vb.); sayı yine saklanır.
+            _bridge.BadgeResult = false;
+            Assert.IsFalse(Pushizo.Notifications.TrySetBadgeCount(7));
+            Assert.AreEqual(7, Pushizo.Notifications.BadgeCount);
+
+            // Mevcut void imza aynı çağrıyı yapar.
+            Pushizo.Notifications.SetBadgeCount(2);
+            Assert.AreEqual("badge:2", LastCall);
+            Pushizo.Notifications.ClearBadge();
+            Assert.AreEqual(0, Pushizo.Notifications.BadgeCount);
+            Assert.Throws<ArgumentOutOfRangeException>(() => Pushizo.Notifications.TrySetBadgeCount(-1));
+        }
+
+        [Test]
+        public void Feature_flags_changed_is_raised_from_the_native_observer()
+        {
+            Init();
+            var count = 0;
+            Action handler = () => count++;
+            Pushizo.FeatureFlags.Changed += handler;
+            // Hata veren abone diğerlerini engellemez.
+            Pushizo.FeatureFlags.Changed += () => throw new InvalidOperationException("abone hatası");
+            var second = 0;
+            Pushizo.FeatureFlags.Changed += () => second++;
+
+            var faulty = new Regex("FeatureFlags.Changed olay işleyicisi hata verdi");
+            LogAssert.Expect(LogType.Error, faulty);
+            _bridge.Emit("featureFlags", "{}");
+            LogAssert.Expect(LogType.Error, faulty);
+            _bridge.Emit("featureFlags", "{}");
+            Assert.AreEqual(2, count);
+            Assert.AreEqual(2, second);
+
+            Pushizo.FeatureFlags.Changed -= handler;
+            LogAssert.Expect(LogType.Error, faulty);
+            _bridge.Emit("featureFlags", "{}");
+            Assert.AreEqual(2, count);
+            Assert.AreEqual(3, second);
+        }
+
+        [Test]
+        public void Inbox_changed_maps_native_observer_events()
+        {
+            Init();
+            var events = new List<InboxChangedEventArgs>();
+            Action<InboxChangedEventArgs> handler = e => events.Add(e);
+            Pushizo.Inbox.Changed += handler;
+
+            _bridge.Emit("inbox", @"{""type"":""listed"",""itemId"":null,""unreadCount"":4}");
+            _bridge.Emit("inbox", @"{""type"":""read"",""itemId"":""itm_1"",""unreadCount"":3}");
+            _bridge.Emit("inbox", @"{""type"":""read_all"",""itemId"":null,""unreadCount"":0}");
+            _bridge.Emit("inbox", @"{""type"":""archived"",""itemId"":""itm_2"",""unreadCount"":0}");
+            _bridge.Emit("inbox", @"{""type"":""count"",""unreadCount"":9}");
+
+            Assert.AreEqual(5, events.Count);
+            Assert.AreEqual(InboxChangeType.Listed, events[0].Type);
+            Assert.IsNull(events[0].ItemId);
+            Assert.AreEqual(4, events[0].UnreadCount);
+            Assert.AreEqual(InboxChangeType.Read, events[1].Type);
+            Assert.AreEqual("itm_1", events[1].ItemId);
+            Assert.AreEqual(3, events[1].UnreadCount);
+            Assert.AreEqual(InboxChangeType.ReadAll, events[2].Type);
+            Assert.AreEqual(InboxChangeType.Archived, events[3].Type);
+            Assert.AreEqual("itm_2", events[3].ItemId);
+            Assert.AreEqual(InboxChangeType.Count, events[4].Type);
+            Assert.AreEqual(9, events[4].UnreadCount);
+
+            // Tanınmayan tür yok sayılır; eksik alan ve bozuk yük günlüğe yazılır. Abone çağrılmaz.
+            _bridge.Emit("inbox", @"{""type"":""yeni_tur"",""unreadCount"":1}");
+            var failed = new Regex(@"yerel olay işlenemedi \(inbox\)");
+            LogAssert.Expect(LogType.Error, failed);
+            _bridge.Emit("inbox", @"{""type"":""read"",""itemId"":""itm_3""}");
+            LogAssert.Expect(LogType.Error, failed);
+            _bridge.Emit("inbox", "bozuk");
+            Assert.AreEqual(5, events.Count);
+
+            Pushizo.Inbox.Changed -= handler;
+            _bridge.Emit("inbox", @"{""type"":""count"",""unreadCount"":1}");
+            Assert.AreEqual(5, events.Count);
+        }
+
+        [Test]
+        public void Chat_show_hide_and_is_presented_use_the_native_screen()
+        {
+            Assert.IsFalse(Pushizo.Chat.IsPresented);
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Chat.Show());
+            Assert.Throws<InvalidOperationException>(() => Pushizo.Chat.Hide());
+            Init();
+
+            Assert.IsFalse(Pushizo.Chat.IsPresented);
+            Assert.IsFalse(Pushizo.Chat.Hide());
+            Pushizo.Chat.Show();
+            Assert.AreEqual("chatShow", LastCall);
+            Assert.IsTrue(Pushizo.Chat.IsPresented);
+            Assert.IsTrue(Pushizo.Chat.Hide());
+            Assert.AreEqual("chatHide", LastCall);
+            Assert.IsFalse(Pushizo.Chat.IsPresented);
+        }
+
+        [Test]
+        public void Editor_bridge_is_inert_for_round_three_apis()
+        {
+            Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+            Init();
+
+            Assert.DoesNotThrow(() => Pushizo.User.SetProperty("plan", "pro"));
+            Assert.DoesNotThrow(() => Pushizo.User.SetProperty("plan", null));
+            Assert.DoesNotThrow(() => Pushizo.Session.SendEvent("purchase", null, 4.99, "order-2026-0001"));
+            Assert.IsFalse(Pushizo.Notifications.TrySetBadgeCount(3));
+            Assert.AreEqual(0, Pushizo.Notifications.BadgeCount);
+            Assert.DoesNotThrow(() => Pushizo.Chat.Show());
+            Assert.IsFalse(Pushizo.Chat.IsPresented);
+            Assert.IsFalse(Pushizo.Chat.Hide());
+            Assert.DoesNotThrow(() => Pushizo.FeatureFlags.Changed += () => { });
+            Assert.DoesNotThrow(() => Pushizo.Inbox.Changed += _ => { });
+        }
+
+        [Test]
+        public void Reset_clears_observer_subscriptions()
+        {
+            Init();
+            var raised = 0;
+            Pushizo.FeatureFlags.Changed += () => raised++;
+            Pushizo.Inbox.Changed += _ => raised++;
+
+            Pushizo.ResetForTests(_bridge, new ImmediateDispatcher());
+            Init();
+            _bridge.Emit("featureFlags", "{}");
+            _bridge.Emit("inbox", @"{""type"":""count"",""unreadCount"":1}");
+            Assert.AreEqual(0, raised);
+        }
+
+        [Test]
+        public void Round_three_bridges_call_the_native_sdk()
+        {
+            var java = PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java");
+            StringAssert.Contains("Pushizo.User.setProperty(key, toValue(parseObject(valueJson).opt(\"value\")))", java);
+            StringAssert.Contains("Pushizo.FeatureFlags.addObserver(FEATURE_FLAG_OBSERVER)", java);
+            StringAssert.Contains("Pushizo.Inbox.addObserver(INBOX_OBSERVER)", java);
+            StringAssert.Contains("event.getType(), \"itemId\", event.getItemId(), \"unreadCount\", event.getUnreadCount()", java);
+            StringAssert.Contains("Pushizo.Session.sendEvent(name, properties, amount, id)", java);
+            StringAssert.Contains("Pushizo.Session.sendEvent(name, properties, amount)", java);
+            StringAssert.Contains("PushizoChat.show(activity)", java);
+            StringAssert.Contains("PushizoChat.hide()", java);
+            StringAssert.Contains("activity instanceof HsChatActivity", java);
+
+            var swift = PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift");
+            StringAssert.Contains("Pushizo.User.setProperty(name, value is NSNull ? nil : value)", swift);
+            StringAssert.Contains("Pushizo.FeatureFlags.addObserver { hsuEmit(\"featureFlags\", [:]) }", swift);
+            StringAssert.Contains("Pushizo.Inbox.addObserver { event in", swift);
+            StringAssert.Contains("\"type\": event.type.rawValue, \"itemId\": event.itemId ?? NSNull(), \"unreadCount\": event.unreadCount", swift);
+            StringAssert.Contains("value: hasValue != 0 ? value : nil, eventId: hsuNonEmpty(eventId))", swift);
+            StringAssert.Contains("Pushizo.Chat.show()", swift);
+            StringAssert.Contains("Pushizo.Chat.hide()", swift);
+            StringAssert.Contains("Pushizo.Chat.isPresented", swift);
+
+            // iOS'ta saklanan rozet sayısı yoktur: yerel çağrı (DllImport) eklenmez.
+            var ios = PackageFile("Runtime/Internal/IosNativeBridge.cs");
+            StringAssert.Contains("public int GetBadgeCount() => 0;", ios);
+            StringAssert.DoesNotContain("hs_badge_count", ios);
         }
     }
 }

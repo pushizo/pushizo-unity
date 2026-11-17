@@ -18,7 +18,12 @@ namespace PushizoSdk.Internal
     {
         bool IsNative { get; }
 
-        /// <summary>Yerel SDK'yı başlatır; olaylar <c>(tür, json)</c> olarak herhangi bir iş parçacığından gelir.</summary>
+        /// <summary>
+        /// Yerel SDK'yı başlatır; olaylar <c>(tür, json)</c> olarak herhangi bir iş parçacığından gelir. Türler: <c>click</c>,
+        /// <c>foreground</c>, <c>subscription</c>, <c>permission</c>, <c>inAppClick</c>, <c>inAppLifecycle</c>, <c>chat</c>,
+        /// <c>chatOpen</c>, <c>featureFlags</c> (<c>{}</c>; değerler yenilendi) ve <c>inbox</c>
+        /// (<c>{"type","itemId","unreadCount"}</c>; kutu değişti).
+        /// </summary>
         void Start(string appId, string optionsJson, Action<string, string> onEvent);
 
         void SetConsentGiven(bool given);
@@ -44,6 +49,13 @@ namespace PushizoSdk.Internal
         void AddAliases(string aliasesJson);
         void RemoveAlias(string label);
         void SetLanguage(string languageCode);
+
+        /// <summary>
+        /// Kullanıcı özelliği yazar (yerel <c>User.setProperty</c>). <paramref name="valueJson"/>: <c>{"value":…}</c>
+        /// (metin, sayı, bool, liste, sözlük; <c>null</c> özelliği siler). Yerel SDK anahtarı reddederse hata mesajı,
+        /// başarıda null.
+        /// </summary>
+        string? SetUserProperty(string key, string valueJson);
         void AddEmail(string email);
         void RemoveEmail(string email);
         void AddSms(string phoneNumber);
@@ -63,8 +75,14 @@ namespace PushizoSdk.Internal
         /// <summary>Android <c>android_group</c> / iOS <c>thread-id</c> grubundaki bildirimleri kaldırır.</summary>
         void RemoveGroupedNotifications(string group);
 
-        /// <summary>Uygulama rozetini ayarlar (yalnızca iOS; Android'de rozet görünen bildirimlerden hesaplanır, çağrı etkisizdir).</summary>
-        void SetBadgeCount(int count);
+        /// <summary>
+        /// Rozet sayısını ayarlar (yerel <c>Notifications.setBadgeCount</c>). iOS: uygulama rozeti, sonuç true. Android: sayı
+        /// saklanır ve sonraki bildirimlere yazılır; sonuç rozetin bu cihazda gösterilebildiğidir. Editor'de false.
+        /// </summary>
+        bool SetBadgeCount(int count);
+
+        /// <summary>Android'de <see cref="SetBadgeCount"/> ile saklanan son sayı; iOS ve Editor'de 0 (yerel SDK okuma sunmaz).</summary>
+        int GetBadgeCount();
 
         /// <summary>
         /// true: ön planda gelen bildirim yerelde ertelenir ve <c>foreground</c> olayı (<c>eventId</c> ile) üretilir;
@@ -101,6 +119,15 @@ namespace PushizoSdk.Internal
         /// </summary>
         void ChatCall(string method, string argsJson, NativeResult result);
 
+        /// <summary>Hazır sohbet ekranını açar (Android <c>HsChatActivity</c>, iOS <c>HSChatViewController</c>); zaten açıksa yeniden açılmaz.</summary>
+        void ChatShow();
+
+        /// <summary>Hazır sohbet ekranını kapatır; kapatılacak açık ekran varsa true.</summary>
+        bool ChatHide();
+
+        /// <summary>Hazır sohbet ekranı şu an açık mı.</summary>
+        bool ChatIsPresented();
+
         /// <summary>
         /// Başarı JSON'u: <c>{"preferences":[{"category","channel","optedIn","explicit","source","updatedAt"}],
         /// "categories":[{"key","name":{},"description":{},"channels":[…]|null,"defaultOptedIn"}]}</c>.
@@ -120,7 +147,11 @@ namespace PushizoSdk.Internal
 
         /// <summary>Mobil reklam kimliği (GAID/IDFA; ADR-0037); null sunucudaki kaydı siler.</summary>
         void SetAdvertisingId(string? id);
-        void SendEvent(string name, string propertiesJson, double value, bool hasValue);
+        /// <summary>
+        /// Özel olay. <paramref name="eventId"/> (isteğe bağlı) tekilleştirme kimliğidir; null ya da geçersiz biçimde yerel
+        /// SDK kendi kimliğini üretir.
+        /// </summary>
+        void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId);
 
         /// <summary>
         /// Yerel SDK'da Live Activities var mı (yalnızca iOS). false ise <see cref="LiveActivitiesManager"/> çağrıları köprüye

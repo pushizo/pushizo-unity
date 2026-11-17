@@ -91,6 +91,27 @@ namespace PushizoSdk.Internal
 
         public static ContentCard ParseContentCard(string json) => ReadContentCard(Object(json));
 
+        /// <summary>
+        /// <c>inbox</c> olayı: <c>{"type":"listed|read|read_all|archived|count","itemId":…|null,"unreadCount":n}</c>.
+        /// Tanınmayan tür (yeni yerel SDK) null döner ve olay yok sayılır.
+        /// </summary>
+        public static InboxChangedEventArgs? ParseInboxChange(string json)
+        {
+            var root = Object(json);
+            InboxChangeType type;
+            switch (Str(root, "type"))
+            {
+                case "listed": type = InboxChangeType.Listed; break;
+                case "read": type = InboxChangeType.Read; break;
+                case "read_all": type = InboxChangeType.ReadAll; break;
+                case "archived": type = InboxChangeType.Archived; break;
+                case "count": type = InboxChangeType.Count; break;
+                default: return null;
+            }
+            var unread = root.TryGetValue("unreadCount", out var u) && u is long count ? (int)count : throw Invalid("unreadCount");
+            return new InboxChangedEventArgs(type, Str(root, "itemId"), unread);
+        }
+
         /// <summary><c>{"unreadCount":n}</c>.</summary>
         public static int ParseUnreadCount(string json)
         {

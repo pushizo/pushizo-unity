@@ -71,6 +71,38 @@ namespace PushizoSdk
         public PushSubscriptionState Current { get; }
     }
 
+    /// <summary>Bildirim kutusu değişiminin türü (<see cref="InboxChangedEventArgs.Type"/>).</summary>
+    public enum InboxChangeType
+    {
+        /// <summary>Liste alındı ve okunmamış sayısı değişti.</summary>
+        Listed,
+        /// <summary>Bir öğe okundu işaretlendi.</summary>
+        Read,
+        /// <summary>Tüm öğeler okundu işaretlendi.</summary>
+        ReadAll,
+        /// <summary>Bir öğe arşivlendi.</summary>
+        Archived,
+        /// <summary>Okunmamış sayısı sorgulandı ve değişti.</summary>
+        Count,
+    }
+
+    /// <summary>Bildirim kutusu değişti (<see cref="InboxManager.Changed"/>).</summary>
+    public sealed class InboxChangedEventArgs : EventArgs
+    {
+        public InboxChangedEventArgs(InboxChangeType type, string? itemId, int unreadCount)
+        {
+            Type = type;
+            ItemId = itemId;
+            UnreadCount = unreadCount;
+        }
+
+        public InboxChangeType Type { get; }
+        /// <summary>Etkilenen öğe; yalnızca <see cref="InboxChangeType.Read"/> ve <see cref="InboxChangeType.Archived"/> olaylarında dolu.</summary>
+        public string? ItemId { get; }
+        /// <summary>Güncel okunmamış öğe sayısı.</summary>
+        public int UnreadCount { get; }
+    }
+
     /// <summary>In-app mesaj düğmesine tıklandı.</summary>
     public sealed class InAppMessageClickedEventArgs : EventArgs
     {

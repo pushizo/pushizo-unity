@@ -49,6 +49,7 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern void hs_add_aliases(byte[] json);
         [DllImport("__Internal")] private static extern void hs_remove_alias(byte[] label);
         [DllImport("__Internal")] private static extern void hs_set_language(byte[] code);
+        [DllImport("__Internal")] private static extern void hs_set_user_property(byte[] key, byte[] valueJson);
         [DllImport("__Internal")] private static extern void hs_add_email(byte[] email);
         [DllImport("__Internal")] private static extern void hs_remove_email(byte[] email);
         [DllImport("__Internal")] private static extern void hs_add_sms(byte[] phone);
@@ -81,12 +82,15 @@ namespace PushizoSdk.Internal
         [DllImport("__Internal")] private static extern void hs_content_cards_list(int limit, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_content_card_event(byte[] id, byte[] eventName, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_chat_call(byte[] method, byte[] argsJson, int requestId, ResultCallback callback);
+        [DllImport("__Internal")] private static extern void hs_chat_show();
+        [DllImport("__Internal")] private static extern int hs_chat_hide();
+        [DllImport("__Internal")] private static extern int hs_chat_is_presented();
         [DllImport("__Internal")] private static extern void hs_get_preferences(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_preferences(byte[] json, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_ads_personalization_consent(int granted, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_get_consents(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_set_advertising_id(byte[]? id);
-        [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue);
+        [DllImport("__Internal")] private static extern void hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue, byte[]? eventId);
         [DllImport("__Internal")] private static extern void hs_setup_default_live_activity(int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern void hs_start_default_live_activity(byte[] activityId, byte[] attributesJson, byte[] contentStateJson, int requestId, ResultCallback callback);
         [DllImport("__Internal")] private static extern int hs_location_is_shared();
@@ -186,6 +190,13 @@ namespace PushizoSdk.Internal
 
         public void SetLanguage(string languageCode) => hs_set_language(Utf8(languageCode));
 
+        /// <summary>Yerel iOS SDK'sı geçersiz girdiyi günlüğe yazıp yok sayar; hata dönmez (anahtar ve değer C# katmanında doğrulanır).</summary>
+        public string? SetUserProperty(string key, string valueJson)
+        {
+            hs_set_user_property(Utf8(key), Utf8(valueJson));
+            return null;
+        }
+
         public void AddEmail(string email) => hs_add_email(Utf8(email));
 
         public void RemoveEmail(string email) => hs_remove_email(Utf8(email));
@@ -218,7 +229,14 @@ namespace PushizoSdk.Internal
 
         public void RemoveGroupedNotifications(string group) => hs_remove_grouped_notifications(Utf8(group));
 
-        public void SetBadgeCount(int count) => hs_set_badge_count(count);
+        public bool SetBadgeCount(int count)
+        {
+            hs_set_badge_count(count);
+            return true;
+        }
+
+        /// <summary>Yerel iOS SDK'sı rozet sayısını okumaya açmaz; saklanan sayı Android'e özgüdür.</summary>
+        public int GetBadgeCount() => 0;
 
         public void SetForegroundHandlerEnabled(bool enabled) => hs_set_foreground_handler_enabled(enabled ? 1 : 0);
 
@@ -262,6 +280,12 @@ namespace PushizoSdk.Internal
         public void ChatCall(string method, string argsJson, NativeResult result) =>
             hs_chat_call(Utf8(method), Utf8(argsJson), Register(s_results, result), s_resultCallback);
 
+        public void ChatShow() => hs_chat_show();
+
+        public bool ChatHide() => hs_chat_hide() != 0;
+
+        public bool ChatIsPresented() => hs_chat_is_presented() != 0;
+
         public void GetPreferences(NativeResult result) =>
             hs_get_preferences(Register(s_results, result), s_resultCallback);
 
@@ -276,8 +300,8 @@ namespace PushizoSdk.Internal
 
         public void SetAdvertisingId(string? id) => hs_set_advertising_id(Utf8OrNull(id));
 
-        public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
-            hs_send_event(Utf8(name), Utf8(propertiesJson), value, hasValue ? 1 : 0);
+        public void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId) =>
+            hs_send_event(Utf8(name), Utf8(propertiesJson), value, hasValue ? 1 : 0, Utf8OrNull(eventId));
 
         public bool SupportsLiveActivities => true;
 

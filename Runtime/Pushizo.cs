@@ -252,6 +252,15 @@ namespace PushizoSdk
                     case "chatOpen":
                         Chat.DispatchOpened(ChatJson.ParseOpened(json));
                         break;
+                    case "featureFlags":
+                        FeatureFlags.DispatchChanged();
+                        break;
+                    case "inbox":
+                    {
+                        var change = BridgeJson.ParseInboxChange(json);
+                        if (change != null) Inbox.DispatchChanged(change);
+                        break;
+                    }
                     default:
                         SdkLog.Write(LogLevel.Debug, $"bilinmeyen yerel olay türü yok sayıldı: {type}");
                         break;
@@ -280,6 +289,23 @@ namespace PushizoSdk
             }
         }
 
+        /// <summary>Parametresiz olay için <see cref="Raise{T}"/> eşdeğeri.</summary>
+        internal static void Raise(Action? handler, string eventName)
+        {
+            if (handler is null) return;
+            foreach (var d in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action)d)();
+                }
+                catch (Exception e)
+                {
+                    SdkLog.Write(LogLevel.Error, $"{eventName} olay işleyicisi hata verdi", e);
+                }
+            }
+        }
+
         /// <summary>Birim testleri için: köprüyü ve dağıtıcıyı değiştirir, durumu sıfırlar.</summary>
         internal static void ResetForTests(INativeBridge bridge, IMainThreadDispatcher dispatcher)
         {
@@ -292,6 +318,8 @@ namespace PushizoSdk
                 User.PushSubscription.Reset();
                 Notifications.Reset();
                 InAppMessages.Reset();
+                Inbox.Reset();
+                FeatureFlags.Reset();
                 Chat.Reset();
                 Debug.Reset();
                 SdkLog.Level = LogLevel.Warn;

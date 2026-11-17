@@ -40,6 +40,7 @@ namespace PushizoSdk.Tests
                 "hs_login_with_profile", "hs_set_ads_personalization_consent", "hs_get_consents", "hs_set_advertising_id",
                 "hs_set_badge_count", "hs_location_permission_granted", "hs_location_background_permission_granted",
                 "hs_location_request_always_permission",
+                "hs_set_user_property", "hs_chat_show", "hs_chat_hide", "hs_chat_is_presented", "hs_send_event",
             }, imports);
             CollectionAssert.IsEmpty(imports.Except(exports), "Swift köprüsünde @_cdecl karşılığı olmayan DllImport");
         }
@@ -60,8 +61,36 @@ namespace PushizoSdk.Tests
                 "deliveryStatus", "deliveryShouldShowGuidance", "deliveryOpenSettings", "deliveryShowGuidance",
                 "loginWithProfile", "registerAdm", "setAdsPersonalizationConsent", "getConsents", "setAdvertisingId",
                 "locationPermissionGranted", "locationBackgroundPermissionGranted", "requestBackgroundLocationPermission",
+                "setUserProperty", "setBadgeCount", "badgeCount", "chatShow", "chatHide", "chatIsPresented", "sendEvent",
             }, calls);
             CollectionAssert.IsEmpty(calls.Except(methods), "Java köprüsünde public static karşılığı olmayan çağrı");
+        }
+
+        [Test]
+        public void Native_event_types_emitted_by_bridges_are_handled_in_csharp()
+        {
+            var handled = Matches(PackageFile("Runtime/Pushizo.cs"), @"case ""(\w+)"":");
+            var java = Matches(PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java"), @"emit\(""(\w+)""");
+            var swift = Matches(PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift"), @"hsuEmit\(""(\w+)""");
+
+            CollectionAssert.IsSubsetOf(new[] { "featureFlags", "inbox" }, java);
+            CollectionAssert.IsSubsetOf(new[] { "featureFlags", "inbox" }, swift);
+            CollectionAssert.IsEmpty(java.Except(handled), "C# katmanında işlenmeyen Android olayı");
+            CollectionAssert.IsEmpty(swift.Except(handled), "C# katmanında işlenmeyen iOS olayı");
+            // İki köprü aynı olay türlerini üretir.
+            CollectionAssert.AreEquivalent(java, swift);
+        }
+
+        [Test]
+        public void Send_event_bridge_signatures_carry_the_event_id()
+        {
+            StringAssert.Contains("hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue, byte[]? eventId)",
+                PackageFile("Runtime/Internal/IosNativeBridge.cs"));
+            StringAssert.Contains("_ hasValue: Int32, _ eventId: UnsafePointer<CChar>?)", PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift"));
+            StringAssert.Contains("sendEvent(String name, String propertiesJson, double value, boolean hasValue, String eventId)",
+                PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java"));
+            StringAssert.Contains("Call(\"sendEvent\", name, propertiesJson, value, hasValue, Text(eventId))",
+                PackageFile("Runtime/Internal/AndroidNativeBridge.cs"));
         }
 
         [Test]

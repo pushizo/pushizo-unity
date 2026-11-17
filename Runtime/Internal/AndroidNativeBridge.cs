@@ -70,6 +70,8 @@ namespace PushizoSdk.Internal
 
         public void SetLanguage(string languageCode) => Call("setLanguage", languageCode);
 
+        public string? SetUserProperty(string key, string valueJson) => NullIfEmpty(Call<string>("setUserProperty", key, valueJson));
+
         public void AddEmail(string email) => Call("addEmail", email);
 
         public void RemoveEmail(string email) => Call("removeEmail", email);
@@ -110,10 +112,13 @@ namespace PushizoSdk.Internal
 
         public void RemoveGroupedNotifications(string group) => Call("removeGroupedNotifications", group);
 
-        /// <summary>Android'de başlatıcı rozeti görünen bildirimlerden hesaplanır; rozet sayısı ayarlanamaz (çağrı etkisiz).</summary>
-        public void SetBadgeCount(int count)
-        {
-        }
+        /// <summary>
+        /// Yerel SDK sayıyı saklar ve sonraki bildirimlere yazar (Android'de başlatıcı rozeti bildirimlerden üretilir); sonuç
+        /// rozetin bu cihazda gösterilebildiğidir.
+        /// </summary>
+        public bool SetBadgeCount(int count) => Call<bool>("setBadgeCount", count);
+
+        public int GetBadgeCount() => Call<int>("badgeCount");
 
         public void SetForegroundHandlerEnabled(bool enabled) => Call("setForegroundHandlerEnabled", enabled);
 
@@ -150,6 +155,17 @@ namespace PushizoSdk.Internal
 
         public void ChatCall(string method, string argsJson, NativeResult result) => Call("chatCall", method, argsJson, new ResultCallback(result));
 
+        /// <summary>Sohbet ekranı Unity etkinliğinin üzerinde ayrı bir etkinlik olarak açılır.</summary>
+        public void ChatShow()
+        {
+            using var activity = CurrentActivity();
+            Call("chatShow", activity);
+        }
+
+        public bool ChatHide() => Call<bool>("chatHide");
+
+        public bool ChatIsPresented() => Call<bool>("chatIsPresented");
+
         public void GetPreferences(NativeResult result) => Call("getPreferences", new ResultCallback(result));
 
         public void SetPreferences(string preferencesJson, NativeResult result) => Call("setPreferences", preferencesJson, new ResultCallback(result));
@@ -161,8 +177,8 @@ namespace PushizoSdk.Internal
 
         public void SetAdvertisingId(string? id) => Call("setAdvertisingId", Text(id));
 
-        public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
-            Call("sendEvent", name, propertiesJson, value, hasValue);
+        public void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId) =>
+            Call("sendEvent", name, propertiesJson, value, hasValue, Text(eventId));
 
         /// <summary>Live Activities iOS'a özgüdür; Android'de çağrılar köprüye ulaşmadan <c>PLATFORM_NOT_SUPPORTED</c> olur.</summary>
         public bool SupportsLiveActivities => false;

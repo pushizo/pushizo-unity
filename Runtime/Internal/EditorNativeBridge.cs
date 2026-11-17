@@ -114,6 +114,12 @@ namespace PushizoSdk.Internal
 
         public void SetLanguage(string languageCode) => Log("SetLanguage");
 
+        public string? SetUserProperty(string key, string valueJson)
+        {
+            Log("User.SetProperty");
+            return null;
+        }
+
         public void AddEmail(string email)
         {
             lock (_gate)
@@ -180,7 +186,14 @@ namespace PushizoSdk.Internal
 
         public void RemoveGroupedNotifications(string group) => Log("RemoveGroupedNotifications");
 
-        public void SetBadgeCount(int count) => Log("SetBadgeCount");
+        /// <summary>Editor'de rozet yoktur: sonuç false, saklanan sayı 0.</summary>
+        public bool SetBadgeCount(int count)
+        {
+            Log("SetBadgeCount");
+            return false;
+        }
+
+        public int GetBadgeCount() => 0;
 
         public void SetForegroundHandlerEnabled(bool enabled)
         {
@@ -257,6 +270,13 @@ namespace PushizoSdk.Internal
             else NotSupported(result, "Canlı sohbet");
         }
 
+        /// <summary>Editor'de hazır sohbet ekranı yoktur: açma günlüğe yazılır, kapatma ve durum false.</summary>
+        public void ChatShow() => Log("Chat.Show");
+
+        public bool ChatHide() => false;
+
+        public bool ChatIsPresented() => false;
+
         public void GetPreferences(NativeResult result)
         {
             Log("GetPreferences");
@@ -283,7 +303,7 @@ namespace PushizoSdk.Internal
 
         public void SetAdvertisingId(string? id) => Log("Ads.SetAdvertisingId");
 
-        public void SendEvent(string name, string propertiesJson, double value, bool hasValue) => Log("SendEvent");
+        public void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId) => Log("SendEvent");
 
         /// <summary>Live Activities iOS'a özgüdür; Editor'de çağrılar köprüye ulaşmadan <c>PLATFORM_NOT_SUPPORTED</c> olur.</summary>
         public bool SupportsLiveActivities => false;
