@@ -173,6 +173,23 @@ namespace PushizoSdk.Internal
 
         public void SetGeofencingEnabled(bool enabled) => Call("setGeofencingEnabled", enabled);
 
+        public string? DeliveryStatus() => NullIfEmpty(Call<string>("deliveryStatus"));
+
+        public bool DeliveryShouldShowGuidance(int minIntervalDays) => Call<bool>("deliveryShouldShowGuidance", minIntervalDays);
+
+        public bool DeliveryOpenSettings(string setting)
+        {
+            using var activity = CurrentActivity();
+            return Call<bool>("deliveryOpenSettings", activity, setting);
+        }
+
+        /// <summary>Diyalog Java köprüsünde, Unity etkinliğinin arayüz iş parçacığında gösterilir; sonuç oradan gelir.</summary>
+        public void DeliveryShowGuidance(string setting, string? message, Action<bool> completion)
+        {
+            using var activity = CurrentActivity();
+            Call("deliveryShowGuidance", activity, setting, Text(message), new PermissionCallback(completion));
+        }
+
         public void FeatureFlagsRefresh(Action<bool> completion) => Call("featureFlagsRefresh", new PermissionCallback(completion));
 
         public bool FeatureFlagIsEnabled(string key, bool defaultValue) => Call<bool>("featureFlagIsEnabled", key, defaultValue);

@@ -326,6 +326,105 @@ namespace PushizoSdk
         public string? Json { get; }
     }
 
+    /// <summary>Bildirim teslim riski (ADR-0092; yerel Android <c>HsDeliveryRisk</c>).</summary>
+    public enum DeliveryRisk
+    {
+        /// <summary>Bilinen bir engel yok.</summary>
+        None = 0,
+        /// <summary>Bildirimler gecikebilir (saldırgan pil yönetimli üretici ve pil muafiyeti yok, seyrek kullanım kovası, veri tasarrufu).</summary>
+        Elevated = 1,
+        /// <summary>Bildirimler büyük olasılıkla gelmiyor (bildirim izni ya da kanalı kapalı, arka plan etkinliği kısıtlı).</summary>
+        High = 2,
+    }
+
+    /// <summary><see cref="DeliveryManager.OpenSettings"/> ve <see cref="DeliveryManager.ShowGuidanceAsync"/> ile açılabilen Android ayar ekranı.</summary>
+    public enum DeliverySetting
+    {
+        /// <summary>Duruma en uygun ekran (<see cref="DeliveryStatus.RecommendedSettings"/> ilk öğesi; öneri yoksa pil optimizasyonu).</summary>
+        Auto = 0,
+        /// <summary>Uygulamanın bildirim ayarları.</summary>
+        Notifications = 1,
+        /// <summary>Üreticinin otomatik başlatma / arka planda çalışma yöneticisi (yoksa uygulama ayrıntıları).</summary>
+        AutoStart = 2,
+        /// <summary>Pil optimizasyonu: üreticinin pil yöneticisi, yoksa sistemin pil optimizasyonu listesi.</summary>
+        BatteryOptimization = 3,
+        /// <summary>Uygulama ayrıntıları (arka plan kısıtı buradan kaldırılır).</summary>
+        AppDetails = 4,
+    }
+
+    /// <summary>
+    /// Cihazın bildirim teslim durumu (<see cref="DeliveryManager.GetStatus"/>; yerel Android <c>HsDeliveryStatus</c>).
+    /// Kişisel veri içermez: üretici, ROM ve kısıt bayrakları. Yalnızca Android cihaz derlemesinde doludur; iOS'ta, Editor'de
+    /// ve SDK başlatılmadan önce <see cref="Supported"/> false, <see cref="Risk"/> <see cref="DeliveryRisk.None"/> ve
+    /// <see cref="RecommendedSettings"/> boştur.
+    /// </summary>
+    public sealed class DeliveryStatus
+    {
+        private static readonly IReadOnlyList<DeliverySetting> NoSettings = new DeliverySetting[0];
+
+        /// <summary>Teşhisin desteklenmediği platformların durumu (risk yok).</summary>
+        public static DeliveryStatus Unsupported { get; } = new DeliveryStatus(
+            false, string.Empty, string.Empty, "other", false, string.Empty, null, true, false, true, false, null, false, false, false,
+            DeliveryRisk.None, NoSettings);
+
+        internal DeliveryStatus(
+            bool supported, string manufacturer, string brand, string vendor, bool aggressiveVendor, string rom, string? romVersion,
+            bool notificationsEnabled, bool channelBlocked, bool batteryOptimizationExempt, bool backgroundRestricted, string? standbyBucket,
+            bool powerSaveMode, bool dataSaverEnabled, bool restricted, DeliveryRisk risk, IReadOnlyList<DeliverySetting> recommendedSettings)
+        {
+            Supported = supported;
+            Manufacturer = manufacturer;
+            Brand = brand;
+            Vendor = vendor;
+            AggressiveVendor = aggressiveVendor;
+            Rom = rom;
+            RomVersion = romVersion;
+            NotificationsEnabled = notificationsEnabled;
+            ChannelBlocked = channelBlocked;
+            BatteryOptimizationExempt = batteryOptimizationExempt;
+            BackgroundRestricted = backgroundRestricted;
+            StandbyBucket = standbyBucket;
+            PowerSaveMode = powerSaveMode;
+            DataSaverEnabled = dataSaverEnabled;
+            Restricted = restricted;
+            Risk = risk;
+            RecommendedSettings = recommendedSettings;
+        }
+
+        /// <summary>Teşhis bu platformda okunabildi mi.</summary>
+        public bool Supported { get; }
+        /// <summary><c>Build.MANUFACTURER</c> (küçük harf).</summary>
+        public string Manufacturer { get; }
+        /// <summary><c>Build.BRAND</c> (küçük harf).</summary>
+        public string Brand { get; }
+        /// <summary>Üretici ailesi: <c>xiaomi</c>, <c>huawei</c>, <c>honor</c>, <c>oppo</c>, <c>realme</c>, <c>oneplus</c>, <c>vivo</c>, <c>samsung</c>, <c>meizu</c>, <c>asus</c>, <c>transsion</c>, <c>other</c>.</summary>
+        public string Vendor { get; }
+        /// <summary>Üreticinin kendi pil/otomatik başlatma yöneticisi arka plandaki uygulamaları durdurabiliyor mu.</summary>
+        public bool AggressiveVendor { get; }
+        /// <summary>ROM kimliği: <c>miui</c>, <c>hyperos</c>, <c>emui</c>, <c>harmonyos</c>, <c>magicos</c>, <c>coloros</c>, <c>oxygenos</c>, <c>realmeui</c>, <c>funtouchos</c>, <c>originos</c>, <c>oneui</c>, <c>flyme</c>, <c>android</c>.</summary>
+        public string Rom { get; }
+        public string? RomVersion { get; }
+        /// <summary>Bildirim izni verilmiş ve bildirimler açık mı.</summary>
+        public bool NotificationsEnabled { get; }
+        /// <summary>Varsayılan bildirim kanalı kullanıcı tarafından kapatılmış mı.</summary>
+        public bool ChannelBlocked { get; }
+        /// <summary>Uygulama pil optimizasyonundan muaf mı.</summary>
+        public bool BatteryOptimizationExempt { get; }
+        /// <summary>Kullanıcı arka plan etkinliğini kısıtlamış mı.</summary>
+        public bool BackgroundRestricted { get; }
+        /// <summary>Bekleme kovası: <c>exempted</c>, <c>active</c>, <c>working_set</c>, <c>frequent</c>, <c>rare</c>, <c>restricted</c> (okunamadıysa null).</summary>
+        public string? StandbyBucket { get; }
+        /// <summary>Pil tasarrufu kipi açık mı.</summary>
+        public bool PowerSaveMode { get; }
+        /// <summary>Veri tasarrufu uygulamanın arka plan verisini engelliyor mu.</summary>
+        public bool DataSaverEnabled { get; }
+        /// <summary>Sistem arka plan kısıtı: kullanıcı kısıtlamış ya da uygulama <c>rare</c>/<c>restricted</c> kovasında.</summary>
+        public bool Restricted { get; }
+        public DeliveryRisk Risk { get; }
+        /// <summary>Kullanıcının açması önerilen ayar ekranları (önem sırasıyla; öneri yoksa boş).</summary>
+        public IReadOnlyList<DeliverySetting> RecommendedSettings { get; }
+    }
+
     /// <summary>SDK çağrısı hatası. <see cref="Code"/> sunucu hata kodu (ör. <c>NOT_FOUND</c>) veya SDK durum kodudur.</summary>
     public sealed class PushizoException : Exception
     {

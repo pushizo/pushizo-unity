@@ -315,6 +315,32 @@ Pushizo.Location.SetGeofencingEnabled(false);  // kayıtlı bölgeler kaldırıl
 - `SetShared(false)`, `SetGeofencingEnabled(false)` ve gizlilik onayının geri alınması kayıtlı bölgeleri kaldırır.
 - **Editor, Standalone, WebGL:** tercih yalnızca bellekte tutulur; bölge kaydedilmez.
 
+### Android teslimat güçlendirme
+
+Xiaomi, Huawei, Oppo, Vivo ve Samsung gibi üreticilerde pil ve otomatik başlatma yöneticisi arka plandaki uygulamayı durdurur;
+bildirim gecikir ya da gelmez ([rehber](https://docs.pushizo.com/docs/channels/android-delivery)). `Pushizo.Delivery` cihazdaki
+kısıtları okur ve kullanıcıyı ilgili ayar ekranına götürür.
+
+```csharp
+DeliveryStatus status = Pushizo.Delivery.GetStatus(); // Supported, Vendor, Rom, Risk, Restricted, RecommendedSettings, …
+if (Pushizo.Delivery.ShouldShowGuidance())            // risk var ve diyalog son 14 günde gösterilmedi
+{
+    bool opened = await Pushizo.Delivery.ShowGuidanceAsync(); // hazır diyalog (22 dil); kabul edilirse ayar ekranı açılır
+}
+Pushizo.Delivery.OpenSettings(DeliverySetting.AutoStart);     // kendi arayüzünüzden
+```
+
+- `DeliveryStatus`: `Supported`, `Manufacturer`, `Brand`, `Vendor`, `AggressiveVendor`, `Rom`, `RomVersion`,
+  `NotificationsEnabled`, `ChannelBlocked`, `BatteryOptimizationExempt`, `BackgroundRestricted`, `StandbyBucket`,
+  `PowerSaveMode`, `DataSaverEnabled`, `Restricted`, `Risk` (`DeliveryRisk.None` | `Elevated` | `High`) ve
+  `RecommendedSettings`; anlamlar yerel Android `HsDeliveryStatus` ile aynıdır.
+- `DeliverySetting`: `Auto`, `Notifications`, `AutoStart`, `BatteryOptimization`, `AppDetails`. Üreticiye özgü ekran
+  bulunamazsa standart Android ekranına düşülür.
+- `ShouldShowGuidance(minIntervalDays = 14)` ve `ShowGuidanceAsync(setting, message)`: SDK diyaloğu kendiliğinden göstermez;
+  uygun anı uygulama seçer.
+- Yalnızca Android'de etkilidir: iOS'ta, Editor'de ve `Initialize` öncesinde durum `DeliveryStatus.Unsupported` (`Supported` false, `Risk` `None`) döner,
+  `OpenSettings` ile `ShowGuidanceAsync` hiçbir şey yapmadan `false` döner. Çağrılar istisna atmaz.
+
 ### Özellik bayrakları
 
 Bayrak değerleri yerel SDK'da oturum başında yenilenir ve cihazda saklanır (ADR-0066); okumalar eşzamanlıdır, ağ

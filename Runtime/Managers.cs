@@ -626,6 +626,91 @@ namespace PushizoSdk
     }
 
     /// <summary>
+    /// Android teslimat güçlendirme (<c>Pushizo.Delivery</c>, ADR-0092): bazı üreticilerin pil/otomatik başlatma yöneticisi
+    /// arka plandaki uygulamayı durdurduğu için bildirimler gecikir ya da gelmez. Bu yüzey cihazdaki kısıtları okur ve
+    /// kullanıcıyı ilgili ayar ekranına götürür. Yalnızca Android cihaz derlemesinde etkilidir: iOS'ta, Editor'de ve SDK
+    /// başlatılmadan önce durum <see cref="DeliveryStatus.Unsupported"/> döner, <see cref="OpenSettings"/> ile
+    /// <see cref="ShowGuidanceAsync"/> hiçbir şey yapmadan false döner. Hiçbir çağrı istisna atmaz.
+    /// </summary>
+    public sealed class DeliveryManager
+    {
+        /// <summary>Hazır diyaloğun yeniden önerilme aralığı (gün; yerel SDK varsayılanıyla aynı).</summary>
+        public const int DefaultGuidanceIntervalDays = 14;
+
+        internal DeliveryManager()
+        {
+        }
+
+        /// <summary>Cihazın teslim durumu: üretici, ROM, pil muafiyeti, arka plan kısıtı, risk ve önerilen ayar ekranları.</summary>
+        public DeliveryStatus GetStatus()
+        {
+            var bridge = Pushizo.BridgeOrNull();
+            if (bridge is null) return DeliveryStatus.Unsupported;
+            try
+            {
+                return BridgeJson.ParseDeliveryStatus(bridge.DeliveryStatus());
+            }
+            catch (Exception e)
+            {
+                SdkLog.Write(LogLevel.Warn, "teslim durumu okunamadı", e);
+                return DeliveryStatus.Unsupported;
+            }
+        }
+
+        /// <summary>
+        /// Hazır açıklama diyaloğu şimdi gösterilmeli mi: teslim riski var ve diyalog son <paramref name="minIntervalDays"/>
+        /// gün içinde gösterilmedi (negatif değer 0 sayılır).
+        /// </summary>
+        public bool ShouldShowGuidance(int minIntervalDays = DefaultGuidanceIntervalDays) =>
+            Guard(bridge => bridge.DeliveryShouldShowGuidance(Math.Max(0, minIntervalDays)), "teslim yönlendirmesi denetlenemedi");
+
+        /// <summary>
+        /// Ayar ekranını açar. <see cref="DeliverySetting.Auto"/> duruma en uygun ekranı seçer; üreticiye özgü ekran
+        /// bulunamazsa standart Android ekranına düşülür. Bir ekran açıldıysa true.
+        /// </summary>
+        public bool OpenSettings(DeliverySetting setting = DeliverySetting.Auto) =>
+            Guard(bridge => bridge.DeliveryOpenSettings(BridgeJson.DeliverySettingWire(setting)), "teslimat ayar ekranı açılamadı");
+
+        /// <summary>
+        /// Hazır açıklama diyaloğunu gösterir (22 dil; <paramref name="message"/> verilirse SDK metni yerine o gösterilir).
+        /// Kullanıcı kabul ederse <paramref name="setting"/> ekranı açılır. Sonuç ana iş parçacığında: ayar ekranı açıldıysa
+        /// true; kullanıcı vazgeçtiyse ya da ekran açılamadıysa false. SDK diyaloğu kendiliğinden göstermez; uygun anı oyun
+        /// seçer (<see cref="ShouldShowGuidance"/>).
+        /// </summary>
+        public async Task<bool> ShowGuidanceAsync(DeliverySetting setting = DeliverySetting.Auto, string? message = null)
+        {
+            if (Pushizo.BridgeOrNull() is null) return false;
+            var wire = BridgeJson.DeliverySettingWire(setting);
+            var text = string.IsNullOrWhiteSpace(message) ? null : message!.Trim();
+            try
+            {
+                return await Pushizo.CallBool((bridge, done) => bridge.DeliveryShowGuidance(wire, text, done));
+            }
+            catch (Exception e)
+            {
+                SdkLog.Write(LogLevel.Warn, "teslimat açıklama diyaloğu gösterilemedi", e);
+                return false;
+            }
+        }
+
+        /// <summary>Köprü çağrısı başlatılmamış SDK'da ve yerel hatada false döner (bu yüzey istisna atmaz).</summary>
+        private static bool Guard(Func<INativeBridge, bool> call, string failure)
+        {
+            var bridge = Pushizo.BridgeOrNull();
+            if (bridge is null) return false;
+            try
+            {
+                return call(bridge);
+            }
+            catch (Exception e)
+            {
+                SdkLog.Write(LogLevel.Warn, failure, e);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Özellik bayrakları (<c>Pushizo.FeatureFlags</c>, ADR-0066). Değerler yerel SDK'da oturum başında yenilenir ve
     /// cihazda saklanır; okumalar eşzamanlıdır ve ağ çağrısı yapmaz. Editor ve yerel SDK'sı olmayan platformlarda
     /// okumalar varsayılan değeri, <see cref="RefreshAsync"/> false döndürür.

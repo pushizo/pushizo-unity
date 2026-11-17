@@ -138,6 +138,30 @@ namespace PushizoSdk.Internal
         void SetGeofencingEnabled(bool enabled);
 
         /// <summary>
+        /// Android teslim durumu (ADR-0092) JSON nesnesi olarak: <c>manufacturer</c>, <c>brand</c>, <c>vendor</c>,
+        /// <c>aggressiveVendor</c>, <c>rom</c>, <c>romVersion</c>, <c>notificationsEnabled</c>, <c>channelBlocked</c>,
+        /// <c>batteryOptimizationExempt</c>, <c>backgroundRestricted</c>, <c>standbyBucket</c>, <c>powerSaveMode</c>,
+        /// <c>dataSaverEnabled</c>, <c>restricted</c>, <c>risk</c>, <c>recommendedSettings</c>. Teşhisin olmadığı platformda
+        /// (iOS, Editor) veya yerel SDK başlatılmadıysa null.
+        /// </summary>
+        string? DeliveryStatus();
+
+        /// <summary>Teslim riski var ve hazır diyalog son <paramref name="minIntervalDays"/> günde gösterilmedi mi (Android dışında false).</summary>
+        bool DeliveryShouldShowGuidance(int minIntervalDays);
+
+        /// <summary>
+        /// Ayar ekranını açar. <paramref name="setting"/>: <c>auto</c> | <c>notifications</c> | <c>auto_start</c> |
+        /// <c>battery_optimization</c> | <c>app_details</c>. Ekran açıldıysa true (Android dışında false); istisna atmaz.
+        /// </summary>
+        bool DeliveryOpenSettings(string setting);
+
+        /// <summary>
+        /// Hazır açıklama diyaloğu (<paramref name="message"/> null ise SDK'nın yerelleştirilmiş metni). Sonuç: kullanıcı
+        /// kabul etti ve ayar ekranı açıldı mı (Android dışında false); herhangi bir iş parçacığından gelebilir.
+        /// </summary>
+        void DeliveryShowGuidance(string setting, string? message, Action<bool> completion);
+
+        /// <summary>
         /// Özellik bayraklarını hemen yeniler (ADR-0066). Sonuç: değerler güncellendi mi; herhangi bir iş parçacığından
         /// gelebilir.
         /// </summary>

@@ -178,6 +178,52 @@ namespace PushizoSdk.Internal
                 ["optedIn"] = p.OptedIn,
             }).ToList());
 
+        /// <summary><see cref="DeliverySetting"/> → köprü değeri (<c>auto_start</c> …).</summary>
+        public static string DeliverySettingWire(DeliverySetting setting) => setting switch
+        {
+            DeliverySetting.Notifications => "notifications",
+            DeliverySetting.AutoStart => "auto_start",
+            DeliverySetting.BatteryOptimization => "battery_optimization",
+            DeliverySetting.AppDetails => "app_details",
+            _ => "auto",
+        };
+
+        /// <summary>
+        /// Android teslim durumu (ADR-0092). JSON yoksa (iOS, Editor, başlatılmamış yerel SDK) <see cref="DeliveryStatus.Unsupported"/>;
+        /// yerel SDK'nın ileride ekleyeceği, bu sürümün tanımadığı ayar ekranı atlanır.
+        /// </summary>
+        public static DeliveryStatus ParseDeliveryStatus(string? json)
+        {
+            if (string.IsNullOrEmpty(json)) return DeliveryStatus.Unsupported;
+            var root = Object(json!);
+            var settings = new List<DeliverySetting>();
+            if (root.TryGetValue("recommendedSettings", out var arr) && arr is List<object?> list)
+            {
+                foreach (var wire in list.OfType<string>())
+                {
+                    switch (wire)
+                    {
+                        case "notifications": settings.Add(DeliverySetting.Notifications); break;
+                        case "auto_start": settings.Add(DeliverySetting.AutoStart); break;
+                        case "battery_optimization": settings.Add(DeliverySetting.BatteryOptimization); break;
+                        case "app_details": settings.Add(DeliverySetting.AppDetails); break;
+                    }
+                }
+            }
+            var risk = Str(root, "risk") switch
+            {
+                "high" => DeliveryRisk.High,
+                "elevated" => DeliveryRisk.Elevated,
+                _ => DeliveryRisk.None,
+            };
+            return new DeliveryStatus(
+                true, Str(root, "manufacturer") ?? string.Empty, Str(root, "brand") ?? string.Empty, Str(root, "vendor") ?? "other",
+                Bool(root, "aggressiveVendor"), Str(root, "rom") ?? string.Empty, Str(root, "romVersion"),
+                Bool(root, "notificationsEnabled"), Bool(root, "channelBlocked"), Bool(root, "batteryOptimizationExempt"),
+                Bool(root, "backgroundRestricted"), Str(root, "standbyBucket"), Bool(root, "powerSaveMode"), Bool(root, "dataSaverEnabled"),
+                Bool(root, "restricted"), risk, settings.AsReadOnly());
+        }
+
         /// <summary><c>{"key":"value"}</c> biçimindeki metin sözlüğü (tag/trigger); sayı/bool değerler metne çevrilir.</summary>
         public static Dictionary<string, string> ParseStringMap(string? json)
         {

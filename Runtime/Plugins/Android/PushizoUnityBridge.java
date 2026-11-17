@@ -33,6 +33,8 @@ import com.pushizo.sdk.HsInAppLifecycleListener;
 import com.pushizo.sdk.HsInAppMessage;
 import com.pushizo.sdk.HsContentCard;
 import com.pushizo.sdk.HsContentCardFeed;
+import com.pushizo.sdk.HsDeliverySetting;
+import com.pushizo.sdk.HsDeliveryStatus;
 import com.pushizo.sdk.HsInboxItem;
 import com.pushizo.sdk.HsInboxPage;
 import com.pushizo.sdk.HsLog;
@@ -531,6 +533,68 @@ public final class PushizoUnityBridge {
      * konum izni ve play-services-location bağımlılığı uygulamadadır; eksikse yerel SDK izlemeyi başlatmaz.
      */
     public static void setGeofencingEnabled(boolean enabled) { Pushizo.Location.setGeofencingEnabled(enabled); }
+
+    // --- Android teslimat güçlendirme (ADR-0092): teşhis, ayar ekranı adayları ve diyalog yerel SDK'dadır ---
+
+    /** Teslim durumu JSON nesnesi olarak; yerel SDK başlatılmadıysa null. Enum değerleri küçük harfle yazılır. */
+    public static String deliveryStatus() {
+        HsDeliveryStatus s = Pushizo.Delivery.status();
+        if (s == null) return null;
+        JSONArray settings = new JSONArray();
+        for (HsDeliverySetting setting : s.getRecommendedSettings()) settings.put(setting.name().toLowerCase(java.util.Locale.ROOT));
+        JSONObject o = object(
+                "manufacturer", s.getManufacturer(),
+                "brand", s.getBrand(),
+                "vendor", s.getVendor().getId(),
+                "aggressiveVendor", s.getVendor().getAggressive(),
+                "rom", s.getRom(),
+                "romVersion", s.getRomVersion(),
+                "notificationsEnabled", s.getNotificationsEnabled(),
+                "channelBlocked", s.getChannelBlocked(),
+                "batteryOptimizationExempt", s.getBatteryOptimizationExempt(),
+                "backgroundRestricted", s.getBackgroundRestricted(),
+                "standbyBucket", s.getStandbyBucket() == null ? null : s.getStandbyBucket().getId(),
+                "powerSaveMode", s.getPowerSaveMode(),
+                "dataSaverEnabled", s.getDataSaverEnabled(),
+                "restricted", s.getRestricted(),
+                "risk", s.getRisk().name().toLowerCase(java.util.Locale.ROOT));
+        put(o, "recommendedSettings", settings);
+        return o.toString();
+    }
+
+    /** Teslim riski var ve hazır diyalog son minIntervalDays günde gösterilmedi mi. */
+    public static boolean deliveryShouldShowGuidance(int minIntervalDays) {
+        return Pushizo.Delivery.shouldShowGuidance(minIntervalDays);
+    }
+
+    /** Ayar ekranını açar (üreticiye özgü ekran yoksa standart Android ekranı); açıldıysa true. Yerel çağrı istisna atmaz. */
+    public static boolean deliveryOpenSettings(Activity activity, String setting) {
+        Context context = activity != null ? activity : appContext;
+        return context != null && Pushizo.Delivery.openSettings(context, deliverySetting(setting));
+    }
+
+    /**
+     * Hazır açıklama diyaloğu (message boşsa SDK'nın yerelleştirilmiş metni). Sonuç arayüz iş parçacığında bir kez gelir:
+     * kullanıcı kabul etti ve ayar ekranı açıldıysa true; vazgeçildi, ekran açılamadı ya da etkinlik yoksa false.
+     */
+    public static void deliveryShowGuidance(Activity activity, String setting, String message, PushizoUnityPermissionCallback callback) {
+        if (activity == null) {
+            callback.onResult(false);
+            return;
+        }
+        Pushizo.Delivery.showGuidance(activity, deliverySetting(setting), emptyToNull(message), opened -> {
+            callback.onResult(opened);
+            return Unit.INSTANCE;
+        });
+    }
+
+    /** C# değeri (auto, notifications, auto_start, battery_optimization, app_details); tanınmayan değer AUTO. */
+    private static HsDeliverySetting deliverySetting(String wire) {
+        for (HsDeliverySetting setting : HsDeliverySetting.values()) {
+            if (setting.name().equalsIgnoreCase(wire)) return setting;
+        }
+        return HsDeliverySetting.AUTO;
+    }
 
     // --- Özellik bayrakları (ADR-0066) ---
 

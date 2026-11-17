@@ -284,6 +284,23 @@ namespace PushizoSdk.Internal
             Log("Location.SetGeofencingEnabled");
         }
 
+        /// <summary>Editor'de teslim teşhisi yoktur (ADR-0092): durum yok, ayar ekranı ve diyalog açılmaz (false).</summary>
+        public string? DeliveryStatus() => null;
+
+        public bool DeliveryShouldShowGuidance(int minIntervalDays) => false;
+
+        public bool DeliveryOpenSettings(string setting)
+        {
+            Log("Delivery.OpenSettings");
+            return false;
+        }
+
+        public void DeliveryShowGuidance(string setting, string? message, Action<bool> completion)
+        {
+            Log("Delivery.ShowGuidance");
+            completion(false);
+        }
+
         /// <summary>Editor'de bayrak değeri yoktur; yenileme false, okumalar varsayılan değeri verir.</summary>
         public void FeatureFlagsRefresh(Action<bool> completion)
         {

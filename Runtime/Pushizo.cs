@@ -45,6 +45,8 @@ namespace PushizoSdk
         public static SessionManager Session { get; } = new SessionManager();
         public static LiveActivitiesManager LiveActivities { get; } = new LiveActivitiesManager();
         public static LocationManager Location { get; } = new LocationManager();
+        /// <summary>Android teslimat güçlendirme (ADR-0092; yalnızca Android cihaz derlemesinde etkilidir).</summary>
+        public static DeliveryManager Delivery { get; } = new DeliveryManager();
         /// <summary>Özellik bayrakları (ADR-0066).</summary>
         public static FeatureFlagsManager FeatureFlags { get; } = new FeatureFlagsManager();
         /// <summary>Gömülü yerleşimler (ADR-0068).</summary>

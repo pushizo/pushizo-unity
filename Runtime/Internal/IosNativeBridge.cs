@@ -274,6 +274,15 @@ namespace PushizoSdk.Internal
 
         public void SetGeofencingEnabled(bool enabled) => hs_location_set_geofencing_enabled(enabled ? 1 : 0);
 
+        // Android teslimat güçlendirme (ADR-0092) iOS'ta yoktur: yerel çağrı yapılmaz; durum yok, diğerleri etkisiz false.
+        public string? DeliveryStatus() => null;
+
+        public bool DeliveryShouldShowGuidance(int minIntervalDays) => false;
+
+        public bool DeliveryOpenSettings(string setting) => false;
+
+        public void DeliveryShowGuidance(string setting, string? message, Action<bool> completion) => completion(false);
+
         public void FeatureFlagsRefresh(Action<bool> completion) =>
             hs_feature_flags_refresh(Register(s_permissions, completion), s_permissionCallback);
 
