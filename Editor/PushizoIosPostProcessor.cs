@@ -18,7 +18,7 @@ namespace PushizoSdk.Editor
     public static class PushizoIosPostProcessor
     {
         public const string ExtensionTargetName = "PushizoNotificationServiceExtension";
-        private const string PodVersion = "~> 0.2";
+        private const string PodVersion = "~> 0.3";
 
         [PostProcessBuild(45)]
         public static void OnPostProcessBuild(BuildTarget target, string buildPath)

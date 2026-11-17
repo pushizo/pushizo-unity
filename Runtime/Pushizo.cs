@@ -20,7 +20,7 @@ namespace PushizoSdk
     public static class Pushizo
     {
         /// <summary>Bu C# katmanının sürümü.</summary>
-        public const string SdkVersion = "0.2.0";
+        public const string SdkVersion = "0.3.0";
 
         private static readonly object s_gate = new object();
         private static INativeBridge? s_bridge;

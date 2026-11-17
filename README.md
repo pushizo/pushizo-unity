@@ -15,7 +15,7 @@
 
 ```json
 // Packages/manifest.json
-"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.2.0"
+"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.3.0"
 ```
 
 The detailed guide below is in Turkish; code samples are language-neutral. Full documentation:
@@ -47,7 +47,7 @@ Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](ht
 ```json
 {
   "dependencies": {
-    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.2.0"
+    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.3.0"
   }
 }
 ```
@@ -80,7 +80,7 @@ Yerel SDK'lar Maven Central/CocoaPods'a yayımlanana kadar açık depolardan kul
 - Android: `git clone https://github.com/pushizo/pushizo-android && gradle -p pushizo-android :pushizo:publishToMavenLocal`,
   ardından Unity'de Player Settings → Publishing Settings → Custom Main Gradle Template / Settings Template'te
   `mavenLocal()` deposunu ekleyin.
-- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.2.0'`
+- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.3.0'`
   (NSE hedefinde `Pushizo/Extension` aynı kaynakla).
 
 ## Kullanım
