@@ -15,7 +15,7 @@
 
 ```json
 // Packages/manifest.json
-"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.2.0"
+"com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.3.0"
 ```
 
 The detailed guide below is in Turkish; code samples are language-neutral. Full documentation:
@@ -47,7 +47,7 @@ Gereksinimler: Unity 2021.3+, [External Dependency Manager for Unity (EDM4U)](ht
 ```json
 {
   "dependencies": {
-    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.2.0"
+    "com.pushizo.unity": "https://github.com/pushizo/pushizo-unity.git#0.3.0"
   }
 }
 ```
@@ -80,7 +80,7 @@ Yerel SDK'lar Maven Central/CocoaPods'a yayımlanana kadar açık depolardan kul
 - Android: `git clone https://github.com/pushizo/pushizo-android && gradle -p pushizo-android :pushizo:publishToMavenLocal`,
   ardından Unity'de Player Settings → Publishing Settings → Custom Main Gradle Template / Settings Template'te
   `mavenLocal()` deposunu ekleyin.
-- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.2.0'`
+- iOS: oluşan Podfile'da `pod 'Pushizo/App', :git => 'https://github.com/pushizo/pushizo-ios.git', :tag => '0.3.0'`
   (NSE hedefinde `Pushizo/Extension` aynı kaynakla).
 
 ## Kullanım
@@ -252,7 +252,8 @@ geri çekilme + `after_seq` yoklaması) ve push ile gelen temsilci mesajları (`
 `start` sonrası login/logout ve push aboneliği değişince bağlama yerel SDK'da yenilenir, logout ziyaretçiyi sıfırlar.
 Mesajlar `seq` ile sıralanır; ağ yokken gönderilen mesaj `pending` döner ve gönderilince olayla sunucu kopyası gelir.
 Ayrıntı: [android rehberi](https://docs.pushizo.com/docs/sdk/android) / [ios rehberi](https://docs.pushizo.com/docs/sdk/ios) → "Canlı sohbet".
-Editor'de çağrılar `PushizoException` (`PLATFORM_NOT_SUPPORTED`) ile sonuçlanır.
+Editor'de çağrılar `PushizoException` (`PLATFORM_NOT_SUPPORTED`) ile sonuçlanır. Hazır sohbet ekranı için
+`Pushizo.Chat.Show()` (bkz. "Kullanıcı özelliği, olay kimliği, gözlemciler ve hazır sohbet ekranı").
 
 ### Konum
 
@@ -307,13 +308,126 @@ Pushizo.Location.SetGeofencingEnabled(false);  // kayıtlı bölgeler kaldırıl
 
 - Paket izin istemez, manifest'e veya Info.plist'e izin eklemez; mağaza beyanları ve aydınlatma metni uygulamanındır.
 - **iOS:** Info.plist'e `NSLocationAlwaysAndWhenInUseUsageDescription` ekleyin ve "her zaman" iznini uygulamanız istesin
-  (önce "kullanırken" izni verilmiş olmalı). İzin yoksa izleme başlamaz; 100 metrenin altındaki bölgeler güvenilir değildir.
-- **Android:** manifest'e `ACCESS_BACKGROUND_LOCATION` ekleyip izni uygulamanız istesin (Android 11+ sistem Ayarlar
-  ekranını açar); uygulamanın Gradle bağımlılıklarına `com.google.android.gms:play-services-location` ekleyin. Sınıf yoksa
+  (`Pushizo.Location.RequestBackgroundPermissionAsync()`; önce "kullanırken" izni verilmiş olmalı). İzin yoksa izleme başlamaz; 100 metrenin altındaki bölgeler güvenilir değildir.
+- **Android:** manifest'e `ACCESS_BACKGROUND_LOCATION` ekleyip izni uygulamanız istesin
+  (`Pushizo.Location.RequestBackgroundPermissionAsync()`; Android 11+ sistem Ayarlar ekranını açar); uygulamanın Gradle bağımlılıklarına `com.google.android.gms:play-services-location` ekleyin. Sınıf yoksa
   (HMS cihazları, bağımlılığı eklemeyen uygulama) `SetGeofencingEnabled(true)` uyarı günlüğü yazar ve izleme başlamaz; ön
   plan konumu çalışmaya devam eder.
 - `SetShared(false)`, `SetGeofencingEnabled(false)` ve gizlilik onayının geri alınması kayıtlı bölgeleri kaldırır.
 - **Editor, Standalone, WebGL:** tercih yalnızca bellekte tutulur; bölge kaydedilmez.
+
+### Android teslimat güçlendirme
+
+Xiaomi, Huawei, Oppo, Vivo ve Samsung gibi üreticilerde pil ve otomatik başlatma yöneticisi arka plandaki uygulamayı durdurur;
+bildirim gecikir ya da gelmez ([rehber](https://docs.pushizo.com/docs/channels/android-delivery)). `Pushizo.Delivery` cihazdaki
+kısıtları okur ve kullanıcıyı ilgili ayar ekranına götürür.
+
+```csharp
+DeliveryStatus status = Pushizo.Delivery.GetStatus(); // Supported, Vendor, Rom, Risk, Restricted, RecommendedSettings, …
+if (Pushizo.Delivery.ShouldShowGuidance())            // risk var ve diyalog son 14 günde gösterilmedi
+{
+    bool opened = await Pushizo.Delivery.ShowGuidanceAsync(); // hazır diyalog (22 dil); kabul edilirse ayar ekranı açılır
+}
+Pushizo.Delivery.OpenSettings(DeliverySetting.AutoStart);     // kendi arayüzünüzden
+```
+
+- `DeliveryStatus`: `Supported`, `Manufacturer`, `Brand`, `Vendor`, `AggressiveVendor`, `Rom`, `RomVersion`,
+  `NotificationsEnabled`, `ChannelBlocked`, `BatteryOptimizationExempt`, `BackgroundRestricted`, `StandbyBucket`,
+  `PowerSaveMode`, `DataSaverEnabled`, `Restricted`, `Risk` (`DeliveryRisk.None` | `Elevated` | `High`) ve
+  `RecommendedSettings`; anlamlar yerel Android `HsDeliveryStatus` ile aynıdır.
+- `DeliverySetting`: `Auto`, `Notifications`, `AutoStart`, `BatteryOptimization`, `AppDetails`. Üreticiye özgü ekran
+  bulunamazsa standart Android ekranına düşülür.
+- `ShouldShowGuidance(minIntervalDays = 14)` ve `ShowGuidanceAsync(setting, message)`: SDK diyaloğu kendiliğinden göstermez;
+  uygun anı uygulama seçer.
+- Yalnızca Android'de etkilidir: iOS'ta, Editor'de ve `Initialize` öncesinde durum `DeliveryStatus.Unsupported` (`Supported` false, `Risk` `None`) döner,
+  `OpenSettings` ile `ShowGuidanceAsync` hiçbir şey yapmadan `false` döner. Çağrılar istisna atmaz.
+
+### Profille giriş, reklam rızası, rozet ve arka plan konum izni
+
+```csharp
+// Giriş + profil tek çağrıda; geçersiz e-posta/telefon girişten önce ArgumentException verir.
+Pushizo.Login("user_42", new PushizoUserProfile
+{
+    Email = "ali@ornek.com",
+    Sms = "+905321234567",
+    Tags = new Dictionary<string, string> { ["plan"] = "pro" },
+    Aliases = new Dictionary<string, string> { ["crm_id"] = "42" },
+}, jwt: token);
+
+// Reklam kişiselleştirme rızası ve reklam kimliği (GAID / ATT izni sonrası IDFA; kimliği oyun okur).
+UserPreferences prefs = await Pushizo.User.SetAdsPersonalizationConsentAsync(true);
+IReadOnlyList<UserConsent> consents = await Pushizo.User.GetConsentsAsync(); // Purpose, Granted, Source, UpdatedAt
+Pushizo.Ads.SetAdvertisingId(advertisingId);   // null: sunucudaki kayıt silinir
+
+Pushizo.Notifications.SetBadgeCount(3);        // iOS rozeti; Android'de saklanır, sonraki bildirimlere yazılır
+Pushizo.Notifications.ClearBadge();
+
+// Konum izin durumu ve arka plan ("her zaman") izni: bölge izleme için.
+bool foreground = Pushizo.Location.PermissionGranted;
+bool background = Pushizo.Location.BackgroundPermissionGranted;
+bool granted = await Pushizo.Location.RequestBackgroundPermissionAsync("Mağazaya yaklaşınca haber veririz.");
+
+bool listening = await Pushizo.Chat.IsListeningAsync();
+Pushizo.User.RegisterAdm(admRegistrationId);   // Fire OS ADM; iOS'ta etkisiz
+```
+
+- `RequestBackgroundPermissionAsync` ile `RequestAlwaysPermissionAsync` aynı izni ister: Android'de açıklama diyaloğu ve
+  `ACCESS_BACKGROUND_LOCATION` (Android 11 ve sonrasında sistem Ayarlar ekranı; manifest'te izin yoksa `false`), iOS'ta
+  "her zaman" izni (`NSLocationAlwaysAndWhenInUseUsageDescription` gerekir, açıklama metni kullanılmaz). Önce ön plan
+  konum izni verilmiş olmalıdır.
+- Rıza çağrıları tercih ucunu kullanır: kayıtlı abonelik gerekir (yoksa `NOT_READY`), Editor'de `PLATFORM_NOT_SUPPORTED` döner.
+- Reklam kimliğini SDK okumaz (reklam kitaplığı ve ATT istemi içermez); kimlik yalnızca `ads_personalization` rızası olan
+  kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir.
+- Tek platformlu çağrılar diğer platformda ve Editor'de etkisizdir, istisna atmaz: `RegisterAdm` iOS'ta; Editor'de rozet
+  etkisizdir, izin durumları ve `IsListeningAsync` `false` döner.
+
+### Kullanıcı özelliği, olay kimliği, gözlemciler ve hazır sohbet ekranı
+
+```csharp
+// Kullanıcı özelliği: metin, sayı, bool, liste veya sözlük; null özelliği siler.
+Pushizo.User.SetProperty("plan", "pro");
+Pushizo.User.SetProperty("favorites", new List<object> { "sword", "shield" });
+Pushizo.User.SetProperty("plan", null);
+
+// Olay kimliği: reklam pikseliyle aynı kimlik verilirse sunucu olayı bir kez kaydeder.
+Pushizo.Session.SendEvent("purchase", new Dictionary<string, object> { ["sku"] = "gems_100" }, 4.99, "order-2026-0001");
+
+// Gözlemciler (ana iş parçacığında).
+Pushizo.FeatureFlags.Changed += () => ApplyFlags();                    // değerler sunucudan yenilendi
+Pushizo.Inbox.Changed += e => SetBadge(e.UnreadCount);                 // e.Type, e.ItemId, e.UnreadCount
+
+// Rozet: Android'de sayı saklanır ve sonraki bildirimlere yazılır.
+bool shown = Pushizo.Notifications.TrySetBadgeCount(3);                // rozet bu cihazda gösterilebiliyor mu
+int stored = Pushizo.Notifications.BadgeCount;                         // Android'de saklanan sayı; iOS'ta 0
+
+// Hazır sohbet ekranı (oyunun üzerinde yerel arayüz).
+Pushizo.Chat.Show();
+bool open = Pushizo.Chat.IsPresented;
+bool closed = Pushizo.Chat.Hide();                                     // açık ekran kapatıldıysa true
+```
+
+- `SetProperty` anahtarı 1-64 karakterdir; değer metin, sayı, bool, tarih, Guid, enum, liste veya sözlük olabilir
+  (liste ve sözlük içinde `null` olamaz). Geçersiz anahtar ya da değer köprüye gitmeden `ArgumentException` verir;
+  işlem çevrimdışıyken yerel kuyrukta bekler.
+- `SendEvent(name, properties, value, eventId)` mevcut üç parametreli çağrının yanına eklenen aşırı yüklemedir. Kimlik
+  8-64 karakterdir (harf, rakam ve `. _ : -`); boşsa ya da biçim geçersizse yerel SDK kendi kimliğini üretir.
+- `FeatureFlags.Changed` oturum başındaki ve `RefreshAsync` sonrasındaki başarılı yenilemede tetiklenir.
+  `Inbox.Changed` türleri `InboxChangeType`: `Listed`, `Read`, `ReadAll`, `Archived`, `Count`; okundu, tümü okundu ve
+  arşivleme her işlemde, listeleme ve sayım yalnızca okunmamış sayısı değiştiğinde bildirilir. `ItemId` yalnızca
+  `Read` ve `Archived` olaylarında doludur.
+- Rozet artık Android'de de yerel SDK'ya bağlıdır: başlatıcı rozeti bildirimlerden üretildiği için sayı saklanır ve
+  sonraki bildirimlere yazılır (Android 8 ve sonrası; tepside bildirim yokken rozet görünmez). `TrySetBadgeCount`
+  Android'de rozet gösterilemiyorsa (Android 8 öncesi, bildirimler ya da kanal rozeti kapalı) `false`, iOS'ta `true`
+  döner; `SetBadgeCount` aynı işi sonuç döndürmeden yapar. `BadgeCount` Android'de saklanan sayıdır; yerel iOS SDK'sı
+  rozeti okumaya açmadığı için iOS'ta `0` döner.
+- `Chat.Show()` Android'de `HsChatActivity` etkinliğini, iOS'ta modal `HSChatViewController` ekranını açar; ekran
+  açıkken yeniden çağrı ikinci bir ekran açmaz. `IsPresented` iOS'ta yerel değerdir; Android'de yerel SDK bu durumu
+  dışa açmadığı için köprü sohbet etkinliğinin yaşam döngüsünü izler. Kendi arayüzünüzü çizmek için `Chat` veri
+  çağrılarını kullanın.
+- iOS'ta profille giriş ve konum izni durumu artık yerel SDK çağrılarıdır (`Pushizo.login(_:profile:…)`,
+  `Pushizo.Location.permissionGranted`); C# davranışı ve hata biçimi aynıdır.
+- Editor'de bu çağrılar istisna atmaz: `SetProperty`, `SendEvent` ve `Chat.Show` günlüğe yazılır, `TrySetBadgeCount`,
+  `Chat.Hide` ve `IsPresented` `false`, `BadgeCount` `0` döner, gözlemci olayları üretilmez.
 
 ### Özellik bayrakları
 
@@ -369,7 +483,8 @@ Pushizo (C#: doğrulama, JSON sözleşmesi, ana iş parçacığı dağıtıcıs�
 Köprüler yalnızca metin (JSON), sayı, bool ve geri çağrı taşır; JSON biçimleri .NET MAUI köprüsüyle aynıdır.
 Android köprüsü Java'dır (Unity Gradle derlemesinde Kotlin eklentisi gerekmez); Kotlin SDK'nın `suspend` bildirim
 kutusu fonksiyonları `Continuation` ile çağrılır. İzin değişiklikleri yerel SDK izin gözlemcisinden
-(`Pushizo.Notifications.PermissionObserver` / Swift `addPermissionObserver`) `permission` olayı olarak gelir.
+(`Pushizo.Notifications.PermissionObserver` / Swift `addPermissionObserver`) `permission` olayı olarak gelir. Bayrak
+ve kutu gözlemcileri (`FeatureFlags.addObserver`, `Inbox.addObserver`) `featureFlags` ve `inbox` olaylarını üretir.
 
 ## Testler
 

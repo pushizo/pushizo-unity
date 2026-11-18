@@ -286,6 +286,37 @@ namespace PushizoSdk.Tests
         }
 
         [Test]
+        public void Content_cards_round_trip_through_bridge_json()
+        {
+            Init();
+            _bridge.InboxJson = @"{""cards"":[{""id"":""cc_1"",""type"":""captioned_image"",""title"":""Yeni"",""imageUrl"":""https://cdn/x.png"",""buttonText"":""Aç"",""pinned"":true,""priority"":50,""viewed"":false,""clicked"":false,""createdAt"":1759838400000,""data"":{""k"":""v""}},{""id"":""cc_2"",""type"":""bilinmeyen""}],""unviewedCount"":2}";
+            var feed = Pushizo.ContentCards.ListAsync(20);
+            Assert.IsTrue(feed.IsCompleted);
+            Assert.AreEqual("contentCardsList:20", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Assert.AreEqual(2, feed.Result.UnviewedCount);
+            var first = feed.Result.Cards[0];
+            Assert.AreEqual(ContentCardType.CaptionedImage, first.Type);
+            Assert.AreEqual("Aç", first.ButtonText);
+            Assert.IsTrue(first.Pinned);
+            Assert.AreEqual(50, first.Priority);
+            Assert.AreEqual("v", first.Data["k"]);
+            Assert.AreEqual(DateTimeOffset.FromUnixTimeMilliseconds(1759838400000), first.CreatedAt);
+            Assert.AreEqual(ContentCardType.Classic, feed.Result.Cards[1].Type);
+
+            _bridge.InboxJson = @"{""id"":""cc_1"",""type"":""classic"",""viewed"":true,""clicked"":true}";
+            var clicked = Pushizo.ContentCards.LogClickAsync("cc_1");
+            Assert.IsTrue(clicked.Result.Clicked);
+            Assert.AreEqual("contentCardEvent:cc_1:click", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Pushizo.ContentCards.LogImpressionAsync("cc_1").Wait();
+            Assert.AreEqual("contentCardEvent:cc_1:impression", _bridge.Calls[_bridge.Calls.Count - 1]);
+            Pushizo.ContentCards.DismissAsync("cc_1").Wait();
+            Assert.AreEqual("contentCardEvent:cc_1:dismiss", _bridge.Calls[_bridge.Calls.Count - 1]);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => Pushizo.ContentCards.ListAsync(101));
+            Assert.Throws<ArgumentException>(() => Pushizo.ContentCards.DismissAsync(""));
+        }
+
+        [Test]
         public void Preferences_round_trip_through_bridge_json()
         {
             Init();
@@ -497,6 +528,115 @@ namespace PushizoSdk.Tests
             Assert.Throws<InvalidOperationException>(() => Pushizo.LiveActivities.SetupDefaultLiveActivityAsync());
             Assert.Throws<InvalidOperationException>(() =>
                 Pushizo.LiveActivities.StartDefaultLiveActivityAsync("a1", new Dictionary<string, object>(), new Dictionary<string, object>()));
+        }
+
+        [Test]
+        public void Delivery_status_is_parsed_from_native_json()
+        {
+            Init();
+            _bridge.Calls.Clear();
+            _bridge.DeliveryStatusJson =
+                @"{""manufacturer"":""xiaomi"",""brand"":""redmi"",""vendor"":""xiaomi"",""aggressiveVendor"":true,""rom"":""hyperos"",""romVersion"":""1.0.2.0"",""notificationsEnabled"":true,""channelBlocked"":false,""batteryOptimizationExempt"":false,""backgroundRestricted"":false,""standbyBucket"":""rare"",""powerSaveMode"":true,""dataSaverEnabled"":false,""restricted"":true,""risk"":""elevated"",""recommendedSettings"":[""auto_start"",""battery_optimization"",""gelecek_ekran""]}";
+
+            var status = Pushizo.Delivery.GetStatus();
+            Assert.IsTrue(status.Supported);
+            Assert.AreEqual("xiaomi", status.Manufacturer);
+            Assert.AreEqual("redmi", status.Brand);
+            Assert.AreEqual("xiaomi", status.Vendor);
+            Assert.IsTrue(status.AggressiveVendor);
+            Assert.AreEqual("hyperos", status.Rom);
+            Assert.AreEqual("1.0.2.0", status.RomVersion);
+            Assert.IsTrue(status.NotificationsEnabled);
+            Assert.IsFalse(status.ChannelBlocked);
+            Assert.IsFalse(status.BatteryOptimizationExempt);
+            Assert.IsFalse(status.BackgroundRestricted);
+            Assert.AreEqual("rare", status.StandbyBucket);
+            Assert.IsTrue(status.PowerSaveMode);
+            Assert.IsFalse(status.DataSaverEnabled);
+            Assert.IsTrue(status.Restricted);
+            Assert.AreEqual(DeliveryRisk.Elevated, status.Risk);
+            // Bu sürümün tanımadığı ayar ekranı atlanır.
+            CollectionAssert.AreEqual(new[] { DeliverySetting.AutoStart, DeliverySetting.BatteryOptimization }, status.RecommendedSettings);
+            CollectionAssert.AreEqual(new[] { "deliveryStatus" }, _bridge.Calls);
+        }
+
+        [Test]
+        public void Delivery_calls_are_forwarded_to_bridge()
+        {
+            Init();
+            _bridge.Calls.Clear();
+
+            Assert.IsTrue(Pushizo.Delivery.ShouldShowGuidance());
+            Assert.IsTrue(Pushizo.Delivery.ShouldShowGuidance(30));
+            Assert.IsTrue(Pushizo.Delivery.ShouldShowGuidance(-5));
+            Assert.IsTrue(Pushizo.Delivery.OpenSettings());
+            Assert.IsTrue(Pushizo.Delivery.OpenSettings(DeliverySetting.AutoStart));
+            Assert.IsTrue(Pushizo.Delivery.OpenSettings(DeliverySetting.AppDetails));
+
+            var shown = Pushizo.Delivery.ShowGuidanceAsync();
+            Assert.IsTrue(shown.IsCompleted);
+            Assert.IsTrue(shown.Result);
+            Assert.IsTrue(Pushizo.Delivery.ShowGuidanceAsync(DeliverySetting.BatteryOptimization, " Bildirimleri kaçırmayın ").Result);
+            // Boş açıklama yerel SDK'nın yerelleştirilmiş metnine düşer (null iletilir).
+            _bridge.DeliveryResult = false;
+            Assert.IsFalse(Pushizo.Delivery.ShowGuidanceAsync(DeliverySetting.Notifications, "  ").Result);
+            Assert.IsFalse(Pushizo.Delivery.OpenSettings());
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "deliveryShouldShowGuidance:14",
+                "deliveryShouldShowGuidance:30",
+                "deliveryShouldShowGuidance:0",
+                "deliveryOpenSettings:auto",
+                "deliveryOpenSettings:auto_start",
+                "deliveryOpenSettings:app_details",
+                "deliveryShowGuidance:auto:<null>",
+                "deliveryShowGuidance:battery_optimization:Bildirimleri kaçırmayın",
+                "deliveryShowGuidance:notifications:<null>",
+                "deliveryOpenSettings:auto",
+            }, _bridge.Calls);
+        }
+
+        [Test]
+        public void Delivery_is_harmless_without_native_support()
+        {
+            // Başlatılmadan önce: köprüye gitmez, istisna atmaz.
+            Assert.AreSame(DeliveryStatus.Unsupported, Pushizo.Delivery.GetStatus());
+            Assert.IsFalse(Pushizo.Delivery.ShouldShowGuidance());
+            Assert.IsFalse(Pushizo.Delivery.OpenSettings());
+            Assert.IsFalse(Pushizo.Delivery.ShowGuidanceAsync().Result);
+            Assert.IsEmpty(_bridge.Calls);
+
+            // Yerel teşhis yok (iOS köprüsü null döner): desteklenmiyor / risk yok.
+            Init();
+            var status = Pushizo.Delivery.GetStatus();
+            Assert.IsFalse(status.Supported);
+            Assert.AreEqual(DeliveryRisk.None, status.Risk);
+            Assert.IsFalse(status.Restricted);
+            Assert.IsEmpty(status.RecommendedSettings);
+            Assert.AreEqual("other", status.Vendor);
+
+            // Yerel hata (ör. JNI) ve bozuk JSON çağıranı düşürmez; uyarı günlüğe yazılır.
+            Pushizo.Debug.SetLogLevel(LogLevel.None);
+            _bridge.DeliveryFailure = new InvalidOperationException("jni");
+            Assert.AreSame(DeliveryStatus.Unsupported, Pushizo.Delivery.GetStatus());
+            Assert.IsFalse(Pushizo.Delivery.ShouldShowGuidance());
+            Assert.IsFalse(Pushizo.Delivery.OpenSettings());
+            Assert.IsFalse(Pushizo.Delivery.ShowGuidanceAsync().Result);
+            _bridge.DeliveryFailure = null;
+            _bridge.DeliveryStatusJson = "bozuk";
+            Assert.AreSame(DeliveryStatus.Unsupported, Pushizo.Delivery.GetStatus());
+        }
+
+        [Test]
+        public void Editor_bridge_reports_delivery_as_unsupported()
+        {
+            Pushizo.ResetForTests(new EditorNativeBridge(), new ImmediateDispatcher());
+            Init();
+            Assert.IsFalse(Pushizo.Delivery.GetStatus().Supported);
+            Assert.IsFalse(Pushizo.Delivery.ShouldShowGuidance());
+            Assert.IsFalse(Pushizo.Delivery.OpenSettings(DeliverySetting.BatteryOptimization));
+            Assert.IsFalse(Pushizo.Delivery.ShowGuidanceAsync().Result);
         }
 
         [Test]
@@ -739,6 +879,7 @@ namespace PushizoSdk.Tests
             Assert.IsFalse(Pushizo.Notifications.RequestPermissionAsync().Result);
             var inbox = Pushizo.Inbox.ListAsync();
             Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)inbox.Exception!.InnerException!).Code);
+            Assert.AreEqual(PushizoException.PlatformNotSupported, FaultCode(Pushizo.ContentCards.ListAsync()));
             var preferences = Pushizo.User.GetPreferencesAsync();
             Assert.AreEqual(PushizoException.PlatformNotSupported, ((PushizoException)preferences.Exception!.InnerException!).Code);
             var setPreferences = Pushizo.User.SetPreferencesAsync(new[] { new PreferenceInput("promo", true) });

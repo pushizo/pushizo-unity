@@ -45,6 +45,9 @@ namespace PushizoSdk.Internal
         public string? Login(string externalId, string? identityHash, string? jwt) =>
             NullIfEmpty(Call<string>("login", externalId, Text(identityHash), Text(jwt)));
 
+        public string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt) =>
+            NullIfEmpty(Call<string>("loginWithProfile", externalId, profileJson, Text(identityHash), Text(jwt)));
+
         public string? UpdateUserJwt(string jwt) => NullIfEmpty(Call<string>("updateUserJwt", jwt));
 
         public void Logout() => Call("logout");
@@ -67,6 +70,8 @@ namespace PushizoSdk.Internal
 
         public void SetLanguage(string languageCode) => Call("setLanguage", languageCode);
 
+        public string? SetUserProperty(string key, string valueJson) => NullIfEmpty(Call<string>("setUserProperty", key, valueJson));
+
         public void AddEmail(string email) => Call("addEmail", email);
 
         public void RemoveEmail(string email) => Call("removeEmail", email);
@@ -74,6 +79,8 @@ namespace PushizoSdk.Internal
         public void AddSms(string phoneNumber) => Call("addSms", phoneNumber);
 
         public void RemoveSms(string phoneNumber) => Call("removeSms", phoneNumber);
+
+        public string? RegisterAdm(string token) => NullIfEmpty(Call<string>("registerAdm", token));
 
         public string GetEmails() => Call<string>("emails");
 
@@ -105,6 +112,14 @@ namespace PushizoSdk.Internal
 
         public void RemoveGroupedNotifications(string group) => Call("removeGroupedNotifications", group);
 
+        /// <summary>
+        /// Yerel SDK sayıyı saklar ve sonraki bildirimlere yazar (Android'de başlatıcı rozeti bildirimlerden üretilir); sonuç
+        /// rozetin bu cihazda gösterilebildiğidir.
+        /// </summary>
+        public bool SetBadgeCount(int count) => Call<bool>("setBadgeCount", count);
+
+        public int GetBadgeCount() => Call<int>("badgeCount");
+
         public void SetForegroundHandlerEnabled(bool enabled) => Call("setForegroundHandlerEnabled", enabled);
 
         public void ForegroundDisplay(string eventId) => Call("foregroundDisplay", eventId);
@@ -133,14 +148,37 @@ namespace PushizoSdk.Internal
 
         public void InboxUnreadCount(NativeResult result) => Call("inboxUnreadCount", new ResultCallback(result));
 
+        public void ContentCardsList(int limit, NativeResult result) => Call("contentCardsList", limit, new ResultCallback(result));
+
+        public void ContentCardEvent(string id, string eventName, NativeResult result) =>
+            Call("contentCardEvent", id, eventName, new ResultCallback(result));
+
         public void ChatCall(string method, string argsJson, NativeResult result) => Call("chatCall", method, argsJson, new ResultCallback(result));
+
+        /// <summary>Sohbet ekranı Unity etkinliğinin üzerinde ayrı bir etkinlik olarak açılır.</summary>
+        public void ChatShow()
+        {
+            using var activity = CurrentActivity();
+            Call("chatShow", activity);
+        }
+
+        public bool ChatHide() => Call<bool>("chatHide");
+
+        public bool ChatIsPresented() => Call<bool>("chatIsPresented");
 
         public void GetPreferences(NativeResult result) => Call("getPreferences", new ResultCallback(result));
 
         public void SetPreferences(string preferencesJson, NativeResult result) => Call("setPreferences", preferencesJson, new ResultCallback(result));
 
-        public void SendEvent(string name, string propertiesJson, double value, bool hasValue) =>
-            Call("sendEvent", name, propertiesJson, value, hasValue);
+        public void SetAdsPersonalizationConsent(bool granted, NativeResult result) =>
+            Call("setAdsPersonalizationConsent", granted, new ResultCallback(result));
+
+        public void GetConsents(NativeResult result) => Call("getConsents", new ResultCallback(result));
+
+        public void SetAdvertisingId(string? id) => Call("setAdvertisingId", Text(id));
+
+        public void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId) =>
+            Call("sendEvent", name, propertiesJson, value, hasValue, Text(eventId));
 
         /// <summary>Live Activities iOS'a özgüdür; Android'de çağrılar köprüye ulaşmadan <c>PLATFORM_NOT_SUPPORTED</c> olur.</summary>
         public bool SupportsLiveActivities => false;
@@ -164,9 +202,37 @@ namespace PushizoSdk.Internal
             Call("requestLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
         }
 
+        public bool GetLocationPermissionGranted() => Call<bool>("locationPermissionGranted");
+
+        public bool GetLocationBackgroundPermissionGranted() => Call<bool>("locationBackgroundPermissionGranted");
+
+        /// <summary>Açıklama diyaloğu ve sistem izni Java köprüsündedir; sonuç etkinlik ön plana döndüğünde gelir.</summary>
+        public void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion)
+        {
+            using var activity = CurrentActivity();
+            Call("requestBackgroundLocationPermission", activity, Text(rationale), new PermissionCallback(completion));
+        }
+
         public bool GetGeofencingEnabled() => Call<bool>("geofencingEnabled");
 
         public void SetGeofencingEnabled(bool enabled) => Call("setGeofencingEnabled", enabled);
+
+        public string? DeliveryStatus() => NullIfEmpty(Call<string>("deliveryStatus"));
+
+        public bool DeliveryShouldShowGuidance(int minIntervalDays) => Call<bool>("deliveryShouldShowGuidance", minIntervalDays);
+
+        public bool DeliveryOpenSettings(string setting)
+        {
+            using var activity = CurrentActivity();
+            return Call<bool>("deliveryOpenSettings", activity, setting);
+        }
+
+        /// <summary>Diyalog Java köprüsünde, Unity etkinliğinin arayüz iş parçacığında gösterilir; sonuç oradan gelir.</summary>
+        public void DeliveryShowGuidance(string setting, string? message, Action<bool> completion)
+        {
+            using var activity = CurrentActivity();
+            Call("deliveryShowGuidance", activity, setting, Text(message), new PermissionCallback(completion));
+        }
 
         public void FeatureFlagsRefresh(Action<bool> completion) => Call("featureFlagsRefresh", new PermissionCallback(completion));
 

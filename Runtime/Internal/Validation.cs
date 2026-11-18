@@ -105,6 +105,14 @@ namespace PushizoSdk.Internal
         }
 
         /// <summary>Anahtar listesi: null/boş öğe içeremez.</summary>
+        /// <summary>Kullanıcı özelliği anahtarı: kırpılır, 1-64 karakter (yerel iOS SDK'sının sınırı; iki platformda aynı).</summary>
+        public static string RequirePropertyKey(string key, string paramName)
+        {
+            var name = key?.Trim() ?? string.Empty;
+            if (name.Length == 0 || name.Length > 64) throw new ArgumentException("Özellik anahtarı 1-64 karakter olmalı.", paramName);
+            return name;
+        }
+
         public static List<string> RequireKeys(IEnumerable<string> keys, string paramName)
         {
             if (keys is null) throw new ArgumentNullException(paramName);
@@ -116,6 +124,11 @@ namespace PushizoSdk.Internal
         public static void RequireInboxLimit(int limit, string paramName)
         {
             if (limit < 1 || limit > 200) throw new ArgumentOutOfRangeException(paramName, limit, "limit 1-200 olmalı.");
+        }
+
+        public static void RequireContentCardLimit(int limit, string paramName)
+        {
+            if (limit < 1 || limit > 100) throw new ArgumentOutOfRangeException(paramName, limit, "limit 1-100 olmalı.");
         }
 
         // \z: .NET'te $ sondaki satır sonunu da kabul eder.

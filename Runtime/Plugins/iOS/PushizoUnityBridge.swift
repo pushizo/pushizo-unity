@@ -200,6 +200,26 @@ private func hsuItemJson(_ item: HSInboxItem) -> [String: Any] {
     ]
 }
 
+private func hsuCardJson(_ card: HSContentCard) -> [String: Any] {
+    [
+        "id": card.id,
+        "messageId": card.messageId ?? NSNull(),
+        "type": card.type.rawValue,
+        "title": card.title ?? NSNull(),
+        "body": card.body ?? NSNull(),
+        "url": card.url ?? NSNull(),
+        "imageUrl": card.imageUrl ?? NSNull(),
+        "buttonText": card.buttonText ?? NSNull(),
+        "data": card.data,
+        "pinned": card.pinned,
+        "priority": card.priority,
+        "viewed": card.viewed,
+        "clicked": card.clicked,
+        "expiresAt": hsuMillis(card.expiresAt),
+        "createdAt": hsuMillis(card.createdAt),
+    ]
+}
+
 private func hsuPageJson(_ page: HSInboxPage) -> [String: Any] {
     [
         "items": page.items.map { hsuItemJson($0) },
@@ -374,6 +394,11 @@ public func hs_start(_ appId: UnsafePointer<CChar>?, _ optionsJson: UnsafePointe
             hsuEmit("chat", payload)
         }
         Pushizo.Chat.addOpenListener { info in hsuEmit("chatOpen", info.dictionary) }
+        // Bayrak değerleri sunucudan yenilendi → "featureFlags" ({}); kutu değişti → "inbox" ({"type","itemId","unreadCount"}).
+        Pushizo.FeatureFlags.addObserver { hsuEmit("featureFlags", [:]) }
+        Pushizo.Inbox.addObserver { event in
+            hsuEmit("inbox", ["type": event.type.rawValue, "itemId": event.itemId ?? NSNull(), "unreadCount": event.unreadCount])
+        }
         // Yerel SDK izin gözlemcisi → `permission` olayı (`{"permission":bool}`): requestPermission sonrası ve uygulama
         // yeniden etkinleştiğinde (izin Ayarlar'dan değişmiş olabilir) etkin izin değiştiyse çağrılır.
         Pushizo.Notifications.addPermissionObserver { granted in
@@ -403,6 +428,30 @@ public func hs_login(_ externalId: UnsafePointer<CChar>?, _ identityHash: Unsafe
     if let message = Pushizo.loginProofError(identityHash: hash, jwt: token) { return hsuDup(message) }
     Pushizo.login(id, identityHash: hash, jwt: token)
     return nil
+}
+
+/// Giriş + profil (yerel `Pushizo.login(_:profile:identityHash:jwt:)`): profil ve kanıt girişten ÖNCE doğrulanır; geçersizse
+/// hata mesajı döner ve giriş yapılmaz. profileJson: {"email"?, "sms"?, "tags"?: {}, "aliases"?: {}}. Başarıda nil; C#
+/// `hs_free` ile serbest bırakır.
+@_cdecl("hs_login_with_profile")
+public func hs_login_with_profile(_ externalId: UnsafePointer<CChar>?, _ profileJson: UnsafePointer<CChar>?, _ identityHash: UnsafePointer<CChar>?, _ jwt: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let id = hsuNonEmpty(externalId) else { return hsuDup("externalId gerekli") }
+    let json = hsuJsonObject(profileJson) as? [String: Any] ?? [:]
+    let profile = HSUserProfile(
+        email: (json["email"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+        sms: (json["sms"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+        tags: (json["tags"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String },
+        aliases: (json["aliases"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String })
+    do {
+        try Pushizo.login(id, profile: profile, identityHash: hsuNonEmpty(identityHash), jwt: hsuNonEmpty(jwt))
+        return nil
+    } catch HSError.invalidArgument(let message) {
+        return hsuDup(message)
+    } catch HSError.notInitialized {
+        return hsuDup("Pushizo başlatılmadı")
+    } catch {
+        return hsuDup(error.localizedDescription)
+    }
 }
 
 /// Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda nil.
@@ -451,6 +500,15 @@ public func hs_remove_alias(_ label: UnsafePointer<CChar>?) {
 public func hs_set_language(_ code: UnsafePointer<CChar>?) {
     guard let code = hsuNonEmpty(code) else { return }
     Pushizo.User.setLanguage(code)
+}
+
+/// Kullanıcı özelliği (yerel `Pushizo.User.setProperty`). valueJson: {"value":…}; metin, sayı, mantıksal, dizi veya sözlük,
+/// JSON null özelliği siler. Yerel SDK geçersiz girdiyi günlüğe yazıp yok sayar.
+@_cdecl("hs_set_user_property")
+public func hs_set_user_property(_ key: UnsafePointer<CChar>?, _ valueJson: UnsafePointer<CChar>?) {
+    guard let name = hsuNonEmpty(key) else { return }
+    let value = (hsuJsonObject(valueJson) as? [String: Any])?["value"]
+    Pushizo.User.setProperty(name, value is NSNull ? nil : value)
 }
 
 @_cdecl("hs_add_email")
@@ -523,6 +581,10 @@ public func hs_remove_notification(_ identifier: UnsafePointer<CChar>?) {
     Pushizo.Notifications.removeNotification(identifier: id)
 }
 
+/// Uygulama rozetini ayarlar ve bildirim servis uzantısıyla paylaşılan sayacı eşitler; negatif değer 0 sayılır.
+@_cdecl("hs_set_badge_count")
+public func hs_set_badge_count(_ count: Int32) { Pushizo.Notifications.setBadgeCount(max(0, Int(count))) }
+
 /// Aynı `thread-id`'ye sahip bildirimleri bildirim merkezinden kaldırır.
 @_cdecl("hs_remove_grouped_notifications")
 public func hs_remove_grouped_notifications(_ group: UnsafePointer<CChar>?) {
@@ -581,6 +643,25 @@ public func hs_in_app_paused() -> Int32 {
 public func hs_set_in_app_paused(_ paused: Int32) { hsuOnMain { Pushizo.InAppMessages.paused = paused != 0 } }
 
 // MARK: - Canlı sohbet (ADR-0040)
+
+/// Hazır sohbet ekranını etkin sahnenin en üstteki görünüm denetleyicisinden modal açar (zaten açıksa yeniden açılmaz).
+@_cdecl("hs_chat_show")
+public func hs_chat_show() { Pushizo.Chat.show() }
+
+/// Hazır sohbet ekranını kapatır; çağrı anında ekran açıksa 1.
+@_cdecl("hs_chat_hide")
+public func hs_chat_hide() -> Int32 {
+    let presented = hsuReadOnMain { Pushizo.Chat.isPresented }
+    Pushizo.Chat.hide()
+    return presented ? 1 : 0
+}
+
+/// Hazır sohbet ekranı şu an görünüyor mu.
+@_cdecl("hs_chat_is_presented")
+public func hs_chat_is_presented() -> Int32 {
+    let presented = hsuReadOnMain { Pushizo.Chat.isPresented }
+    return presented ? 1 : 0
+}
 
 /// Sohbet çağrıları tek giriş noktasından (Android `chatCall` ve .NET MAUI köprüsüyle aynı yöntem adları ve JSON biçimleri).
 @_cdecl("hs_chat_call")
@@ -646,6 +727,8 @@ public func hs_chat_call(_ method: UnsafePointer<CChar>?, _ argsJson: UnsafePoin
         }
     case "getVisitorId":
         hsuInbox(requestId, callback) { json(["visitorId": Pushizo.Chat.visitorId ?? NSNull()]) }
+    case "isListening":
+        hsuInbox(requestId, callback) { json(["listening": Pushizo.Chat.isListening]) }
     default:
         hsuInbox(requestId, callback) { throw HSChatError.invalidArgument("bilinmeyen sohbet yöntemi: \(name)") }
     }
@@ -686,6 +769,29 @@ public func hs_inbox_archive(_ id: UnsafePointer<CChar>?, _ requestId: Int32, _ 
     }
 }
 
+// İçerik kartları (ADR-0082).
+@_cdecl("hs_content_cards_list")
+public func hs_content_cards_list(_ limit: Int32, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    hsuInbox(requestId, callback) {
+        let feed = try await Pushizo.ContentCards.list(limit: Int(limit))
+        return hsuJsonString(["cards": feed.cards.map { hsuCardJson($0) }, "unviewedCount": feed.unviewedCount])
+    }
+}
+
+@_cdecl("hs_content_card_event")
+public func hs_content_card_event(_ id: UnsafePointer<CChar>?, _ eventName: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let cardId = hsuString(id) ?? ""
+    let name = hsuString(eventName) ?? ""
+    hsuInbox(requestId, callback) {
+        let card: HSContentCard
+        if name == "impression" { card = try await Pushizo.ContentCards.logImpression(cardId) }
+        else if name == "click" { card = try await Pushizo.ContentCards.logClick(cardId) }
+        else if name == "dismiss" { card = try await Pushizo.ContentCards.dismiss(cardId) }
+        else { throw HSError.invalidArgument("Kart olayı impression, click veya dismiss olmalı") }
+        return hsuJsonString(hsuCardJson(card))
+    }
+}
+
 @_cdecl("hs_inbox_unread_count")
 public func hs_inbox_unread_count(_ requestId: Int32, _ callback: HSUResultCallback?) {
     hsuInbox(requestId, callback) {
@@ -713,12 +819,38 @@ public func hs_set_preferences(_ json: UnsafePointer<CChar>?, _ requestId: Int32
     }
 }
 
-/// propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue 0 ise değer gönderilmez.
+/// Reklam kişiselleştirme rızası (ADR-0037); başarı JSON'u hs_get_preferences ile aynı (güncel liste).
+@_cdecl("hs_set_ads_personalization_consent")
+public func hs_set_ads_personalization_consent(_ granted: Int32, _ requestId: Int32, _ callback: HSUResultCallback?) {
+    let value = granted != 0
+    hsuInbox(requestId, callback) {
+        let result: HSPreferencesResult = try await Pushizo.User.setAdsPersonalizationConsent(value)
+        return hsuJsonString(hsuPreferencesResultJson(result))
+    }
+}
+
+/// Rıza kayıtları. Başarı JSON'u: {"consents":[{"purpose","granted","source","updatedAt"}]} (zaman epoch ms).
+@_cdecl("hs_get_consents")
+public func hs_get_consents(_ requestId: Int32, _ callback: HSUResultCallback?) {
+    hsuInbox(requestId, callback) {
+        let consents = try await Pushizo.User.getConsents()
+        return hsuJsonString(["consents": consents.map { consent -> [String: Any] in
+            ["purpose": consent.purpose, "granted": consent.granted, "source": consent.source ?? NSNull(), "updatedAt": hsuMillis(consent.updatedAt)]
+        }])
+    }
+}
+
+/// Mobil reklam kimliği (IDFA; ADR-0037). nil veya boş metin sunucudaki kaydı siler.
+@_cdecl("hs_set_advertising_id")
+public func hs_set_advertising_id(_ id: UnsafePointer<CChar>?) { Pushizo.Ads.setAdvertisingId(hsuNonEmpty(id)) }
+
+/// propertiesJson JSON nesnesi (iç içe nesne/dizi desteklenir); hasValue 0 ise değer gönderilmez. eventId (boş değilse)
+/// tekilleştirme kimliğidir; biçim geçersizse yerel SDK kendi kimliğini üretir.
 @_cdecl("hs_send_event")
-public func hs_send_event(_ name: UnsafePointer<CChar>?, _ propertiesJson: UnsafePointer<CChar>?, _ value: Double, _ hasValue: Int32) {
+public func hs_send_event(_ name: UnsafePointer<CChar>?, _ propertiesJson: UnsafePointer<CChar>?, _ value: Double, _ hasValue: Int32, _ eventId: UnsafePointer<CChar>?) {
     guard let eventName = hsuNonEmpty(name) else { return }
     let properties = (hsuJsonObject(propertiesJson) as? [String: Any]) ?? [:]
-    Pushizo.Session.sendEvent(eventName, properties: properties, value: hasValue != 0 ? value : nil)
+    Pushizo.Session.sendEvent(eventName, properties: properties, value: hasValue != 0 ? value : nil, eventId: hsuNonEmpty(eventId))
 }
 
 // MARK: - Live Activities (ADR-0024)
@@ -776,6 +908,22 @@ public func hs_location_set_shared(_ shared: Int32) { Pushizo.Location.setShared
 public func hs_location_request_permission(_ rationale: UnsafePointer<CChar>?, _ requestId: Int32, _ callback: HSUPermissionCallback?) {
     let text = hsuNonEmpty(rationale)
     Pushizo.Location.requestPermission(rationale: text) { granted in
+        callback?(requestId, granted ? 1 : 0)
+    }
+}
+
+/// Ön plan konum izni verilmiş mi ("kullanırken" veya "her zaman"); istem göstermez.
+@_cdecl("hs_location_permission_granted")
+public func hs_location_permission_granted() -> Int32 { Pushizo.Location.permissionGranted ? 1 : 0 }
+
+/// Arka plan konum izni verilmiş mi ("her zaman"); istem göstermez.
+@_cdecl("hs_location_background_permission_granted")
+public func hs_location_background_permission_granted() -> Int32 { Pushizo.Location.backgroundPermissionGranted ? 1 : 0 }
+
+/// "Her zaman" konum iznini ister; önce "kullanırken" izni verilmiş olmalıdır. Sonuç ana iş parçacığında: 1/0.
+@_cdecl("hs_location_request_always_permission")
+public func hs_location_request_always_permission(_ requestId: Int32, _ callback: HSUPermissionCallback?) {
+    Pushizo.Location.requestAlwaysPermission { granted in
         callback?(requestId, granted ? 1 : 0)
     }
 }

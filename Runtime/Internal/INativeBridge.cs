@@ -18,12 +18,24 @@ namespace PushizoSdk.Internal
     {
         bool IsNative { get; }
 
-        /// <summary>Yerel SDK'yı başlatır; olaylar <c>(tür, json)</c> olarak herhangi bir iş parçacığından gelir.</summary>
+        /// <summary>
+        /// Yerel SDK'yı başlatır; olaylar <c>(tür, json)</c> olarak herhangi bir iş parçacığından gelir. Türler: <c>click</c>,
+        /// <c>foreground</c>, <c>subscription</c>, <c>permission</c>, <c>inAppClick</c>, <c>inAppLifecycle</c>, <c>chat</c>,
+        /// <c>chatOpen</c>, <c>featureFlags</c> (<c>{}</c>; değerler yenilendi) ve <c>inbox</c>
+        /// (<c>{"type","itemId","unreadCount"}</c>; kutu değişti).
+        /// </summary>
         void Start(string appId, string optionsJson, Action<string, string> onEvent);
 
         void SetConsentGiven(bool given);
         /// <summary>Kanıt app'in kimlik doğrulama kipine uymuyorsa hata mesajı döner (giriş yapılmaz); başarıda null.</summary>
         string? Login(string externalId, string? identityHash, string? jwt);
+
+        /// <summary>
+        /// Giriş + profil (yerel <c>login(externalId, profile, …)</c>). <paramref name="profileJson"/>:
+        /// <c>{"email"?, "sms"?, "tags"?: {}, "aliases"?: {}}</c> (C# katmanında doğrulanmış/normalize edilmiş). Geçersiz
+        /// profil veya kanıt hatasında mesaj döner ve giriş yapılmaz; başarıda null.
+        /// </summary>
+        string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt);
 
         /// <summary>Kimlik JWT'sini yeniler; giriş yapılmamışsa hata mesajı döner, başarıda null.</summary>
         string? UpdateUserJwt(string jwt);
@@ -37,10 +49,19 @@ namespace PushizoSdk.Internal
         void AddAliases(string aliasesJson);
         void RemoveAlias(string label);
         void SetLanguage(string languageCode);
+
+        /// <summary>
+        /// Kullanıcı özelliği yazar (yerel <c>User.setProperty</c>). <paramref name="valueJson"/>: <c>{"value":…}</c>
+        /// (metin, sayı, bool, liste, sözlük; <c>null</c> özelliği siler). Yerel SDK anahtarı reddederse hata mesajı,
+        /// başarıda null.
+        /// </summary>
+        string? SetUserProperty(string key, string valueJson);
         void AddEmail(string email);
         void RemoveEmail(string email);
         void AddSms(string phoneNumber);
         void RemoveSms(string phoneNumber);
+        /// <summary>Fire OS ADM kayıt kimliği (yalnızca Android). Geçersiz kimlikte hata mesajı, başarıda ve diğer platformlarda null.</summary>
+        string? RegisterAdm(string token);
         string GetEmails();
         string GetSmsNumbers();
         string GetPushSubscription();
@@ -53,6 +74,15 @@ namespace PushizoSdk.Internal
         void RemoveNotification(string id);
         /// <summary>Android <c>android_group</c> / iOS <c>thread-id</c> grubundaki bildirimleri kaldırır.</summary>
         void RemoveGroupedNotifications(string group);
+
+        /// <summary>
+        /// Rozet sayısını ayarlar (yerel <c>Notifications.setBadgeCount</c>). iOS: uygulama rozeti, sonuç true. Android: sayı
+        /// saklanır ve sonraki bildirimlere yazılır; sonuç rozetin bu cihazda gösterilebildiğidir. Editor'de false.
+        /// </summary>
+        bool SetBadgeCount(int count);
+
+        /// <summary>Android'de <see cref="SetBadgeCount"/> ile saklanan son sayı; iOS ve Editor'de 0 (yerel SDK okuma sunmaz).</summary>
+        int GetBadgeCount();
 
         /// <summary>
         /// true: ön planda gelen bildirim yerelde ertelenir ve <c>foreground</c> olayı (<c>eventId</c> ile) üretilir;
@@ -74,13 +104,29 @@ namespace PushizoSdk.Internal
         void InboxArchive(string id, NativeResult result);
         void InboxUnreadCount(NativeResult result);
 
+        /// <summary>İçerik kartları (ADR-0082): <c>{"cards":[…],"unviewedCount":n}</c>.</summary>
+        void ContentCardsList(int limit, NativeResult result);
+
+        /// <summary>Kart olayı: <c>impression</c>, <c>click</c> veya <c>dismiss</c>; güncel kartı döndürür.</summary>
+        void ContentCardEvent(string id, string eventName, NativeResult result);
+
         /// <summary>
         /// Canlı sohbet çağrısı (ADR-0040). <paramref name="method"/>: start, getConfig, getConversation, getMessages,
         /// sendMessage, sendAttachment (base64), markRead, refreshUnreadCount, getUnreadCount, leaveOfflineMessage, setTyping,
-        /// startListening, stopListening, attachmentUrl, getVisitorId. Başarı JSON'u yerel modelin camelCase sözlüğü
-        /// (sayaçlar <c>{"unreadCount"}</c>, adres <c>{"url"}</c>, kimlik <c>{"visitorId"}</c>; dönüşsüz işlemlerde null).
+        /// startListening, stopListening, attachmentUrl, getVisitorId, isListening. Başarı JSON'u yerel modelin camelCase sözlüğü
+        /// (sayaçlar <c>{"unreadCount"}</c>, adres <c>{"url"}</c>, kimlik <c>{"visitorId"}</c>, dinleme <c>{"listening"}</c>;
+        /// dönüşsüz işlemlerde null).
         /// </summary>
         void ChatCall(string method, string argsJson, NativeResult result);
+
+        /// <summary>Hazır sohbet ekranını açar (Android <c>HsChatActivity</c>, iOS <c>HSChatViewController</c>); zaten açıksa yeniden açılmaz.</summary>
+        void ChatShow();
+
+        /// <summary>Hazır sohbet ekranını kapatır; kapatılacak açık ekran varsa true.</summary>
+        bool ChatHide();
+
+        /// <summary>Hazır sohbet ekranı şu an açık mı.</summary>
+        bool ChatIsPresented();
 
         /// <summary>
         /// Başarı JSON'u: <c>{"preferences":[{"category","channel","optedIn","explicit","source","updatedAt"}],
@@ -93,7 +139,19 @@ namespace PushizoSdk.Internal
         /// <see cref="GetPreferences"/> ile aynı (güncel liste).
         /// </summary>
         void SetPreferences(string preferencesJson, NativeResult result);
-        void SendEvent(string name, string propertiesJson, double value, bool hasValue);
+        /// <summary>Reklam kişiselleştirme rızası (ADR-0037); başarı JSON'u <see cref="GetPreferences"/> ile aynı.</summary>
+        void SetAdsPersonalizationConsent(bool granted, NativeResult result);
+
+        /// <summary>Rıza kayıtları. Başarı JSON'u: <c>{"consents":[{"purpose","granted","source","updatedAt"}]}</c> (zaman epoch ms).</summary>
+        void GetConsents(NativeResult result);
+
+        /// <summary>Mobil reklam kimliği (GAID/IDFA; ADR-0037); null sunucudaki kaydı siler.</summary>
+        void SetAdvertisingId(string? id);
+        /// <summary>
+        /// Özel olay. <paramref name="eventId"/> (isteğe bağlı) tekilleştirme kimliğidir; null ya da geçersiz biçimde yerel
+        /// SDK kendi kimliğini üretir.
+        /// </summary>
+        void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId);
 
         /// <summary>
         /// Yerel SDK'da Live Activities var mı (yalnızca iOS). false ise <see cref="LiveActivitiesManager"/> çağrıları köprüye
@@ -125,11 +183,47 @@ namespace PushizoSdk.Internal
         /// </summary>
         void RequestLocationPermission(string? rationale, Action<bool> completion);
 
+        /// <summary>Ön plan konum izni verilmiş mi (Android yaklaşık/hassas; iOS "kullanırken" veya "her zaman").</summary>
+        bool GetLocationPermissionGranted();
+
+        /// <summary>Arka plan konum izni verilmiş mi (Android <c>ACCESS_BACKGROUND_LOCATION</c>; iOS "her zaman").</summary>
+        bool GetLocationBackgroundPermissionGranted();
+
+        /// <summary>
+        /// Arka plan konum iznini ister (Android: açıklama diyaloğu + sistem izni; iOS: "her zaman" izni,
+        /// <paramref name="rationale"/> yok sayılır). Sonuç: arka plan izni var/verildi mi; herhangi bir iş parçacığından gelebilir.
+        /// </summary>
+        void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion);
+
         /// <summary>Arka plan bölge izleme açık mı (ADR-0065; yerel SDK'nın kalıcı tercihi, varsayılan kapalı).</summary>
         bool GetGeofencingEnabled();
 
         /// <summary>Bölge izlemeyi açar/kapatır. Köprü izin istemez; arka plan izni ve platform tanımları uygulamanındır.</summary>
         void SetGeofencingEnabled(bool enabled);
+
+        /// <summary>
+        /// Android teslim durumu (ADR-0092) JSON nesnesi olarak: <c>manufacturer</c>, <c>brand</c>, <c>vendor</c>,
+        /// <c>aggressiveVendor</c>, <c>rom</c>, <c>romVersion</c>, <c>notificationsEnabled</c>, <c>channelBlocked</c>,
+        /// <c>batteryOptimizationExempt</c>, <c>backgroundRestricted</c>, <c>standbyBucket</c>, <c>powerSaveMode</c>,
+        /// <c>dataSaverEnabled</c>, <c>restricted</c>, <c>risk</c>, <c>recommendedSettings</c>. Teşhisin olmadığı platformda
+        /// (iOS, Editor) veya yerel SDK başlatılmadıysa null.
+        /// </summary>
+        string? DeliveryStatus();
+
+        /// <summary>Teslim riski var ve hazır diyalog son <paramref name="minIntervalDays"/> günde gösterilmedi mi (Android dışında false).</summary>
+        bool DeliveryShouldShowGuidance(int minIntervalDays);
+
+        /// <summary>
+        /// Ayar ekranını açar. <paramref name="setting"/>: <c>auto</c> | <c>notifications</c> | <c>auto_start</c> |
+        /// <c>battery_optimization</c> | <c>app_details</c>. Ekran açıldıysa true (Android dışında false); istisna atmaz.
+        /// </summary>
+        bool DeliveryOpenSettings(string setting);
+
+        /// <summary>
+        /// Hazır açıklama diyaloğu (<paramref name="message"/> null ise SDK'nın yerelleştirilmiş metni). Sonuç: kullanıcı
+        /// kabul etti ve ayar ekranı açıldı mı (Android dışında false); herhangi bir iş parçacığından gelebilir.
+        /// </summary>
+        void DeliveryShowGuidance(string setting, string? message, Action<bool> completion);
 
         /// <summary>
         /// Özellik bayraklarını hemen yeniler (ADR-0066). Sonuç: değerler güncellendi mi; herhangi bir iş parçacığından

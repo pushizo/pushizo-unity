@@ -37,6 +37,10 @@ namespace PushizoSdk.Tests
                 "hs_location_is_geofencing_enabled", "hs_location_set_geofencing_enabled",
                 "hs_feature_flags_refresh", "hs_feature_flags_is_enabled", "hs_feature_flags_value",
                 "hs_placements_list", "hs_placements_report",
+                "hs_login_with_profile", "hs_set_ads_personalization_consent", "hs_get_consents", "hs_set_advertising_id",
+                "hs_set_badge_count", "hs_location_permission_granted", "hs_location_background_permission_granted",
+                "hs_location_request_always_permission",
+                "hs_set_user_property", "hs_chat_show", "hs_chat_hide", "hs_chat_is_presented", "hs_send_event",
             }, imports);
             CollectionAssert.IsEmpty(imports.Except(exports), "Swift köprüsünde @_cdecl karşılığı olmayan DllImport");
         }
@@ -54,8 +58,65 @@ namespace PushizoSdk.Tests
                 "geofencingEnabled", "setGeofencingEnabled",
                 "featureFlagsRefresh", "featureFlagIsEnabled", "featureFlagValue",
                 "placementsList", "placementsReport",
+                "deliveryStatus", "deliveryShouldShowGuidance", "deliveryOpenSettings", "deliveryShowGuidance",
+                "loginWithProfile", "registerAdm", "setAdsPersonalizationConsent", "getConsents", "setAdvertisingId",
+                "locationPermissionGranted", "locationBackgroundPermissionGranted", "requestBackgroundLocationPermission",
+                "setUserProperty", "setBadgeCount", "badgeCount", "chatShow", "chatHide", "chatIsPresented", "sendEvent",
             }, calls);
             CollectionAssert.IsEmpty(calls.Except(methods), "Java köprüsünde public static karşılığı olmayan çağrı");
+        }
+
+        [Test]
+        public void Native_event_types_emitted_by_bridges_are_handled_in_csharp()
+        {
+            var handled = Matches(PackageFile("Runtime/Pushizo.cs"), @"case ""(\w+)"":");
+            var java = Matches(PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java"), @"emit\(""(\w+)""");
+            var swift = Matches(PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift"), @"hsuEmit\(""(\w+)""");
+
+            CollectionAssert.IsSubsetOf(new[] { "featureFlags", "inbox" }, java);
+            CollectionAssert.IsSubsetOf(new[] { "featureFlags", "inbox" }, swift);
+            CollectionAssert.IsEmpty(java.Except(handled), "C# katmanında işlenmeyen Android olayı");
+            CollectionAssert.IsEmpty(swift.Except(handled), "C# katmanında işlenmeyen iOS olayı");
+            // İki köprü aynı olay türlerini üretir.
+            CollectionAssert.AreEquivalent(java, swift);
+        }
+
+        [Test]
+        public void Send_event_bridge_signatures_carry_the_event_id()
+        {
+            StringAssert.Contains("hs_send_event(byte[] name, byte[] propertiesJson, double value, int hasValue, byte[]? eventId)",
+                PackageFile("Runtime/Internal/IosNativeBridge.cs"));
+            StringAssert.Contains("_ hasValue: Int32, _ eventId: UnsafePointer<CChar>?)", PackageFile("Runtime/Plugins/iOS/PushizoUnityBridge.swift"));
+            StringAssert.Contains("sendEvent(String name, String propertiesJson, double value, boolean hasValue, String eventId)",
+                PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java"));
+            StringAssert.Contains("Call(\"sendEvent\", name, propertiesJson, value, hasValue, Text(eventId))",
+                PackageFile("Runtime/Internal/AndroidNativeBridge.cs"));
+        }
+
+        [Test]
+        public void Delivery_bridge_calls_native_delivery_api_and_ios_stays_inert()
+        {
+            var java = PackageFile("Runtime/Plugins/Android/PushizoUnityBridge.java");
+            StringAssert.Contains("Pushizo.Delivery.status()", java);
+            StringAssert.Contains("Pushizo.Delivery.shouldShowGuidance(minIntervalDays)", java);
+            StringAssert.Contains("Pushizo.Delivery.openSettings(context, deliverySetting(setting))", java);
+            StringAssert.Contains("Pushizo.Delivery.showGuidance(activity, deliverySetting(setting), emptyToNull(message), opened ->", java);
+            // Köprü pil optimizasyonu iznini istemez (ADR-0092 §3).
+            StringAssert.DoesNotContain("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", java);
+
+            // C# ayrıştırıcısının okuduğu her alan Java JSON'unda yazılır.
+            var parser = PackageFile("Runtime/Internal/BridgeJson.cs");
+            var start = parser.IndexOf("public static DeliveryStatus ParseDeliveryStatus", System.StringComparison.Ordinal);
+            var body = parser.Substring(start, parser.IndexOf("ParseStringMap", start, System.StringComparison.Ordinal) - start);
+            var fields = Matches(body, @"(?:Str|Bool|TryGetValue)\((?:root, )?""(\w+)""");
+            Assert.AreEqual(16, fields.Count);
+            foreach (var field in fields) StringAssert.Contains('"' + field + '"', java);
+
+            // iOS'ta teşhis yoktur: yerel çağrı (DllImport) eklenmez, köprü sabit yanıt verir.
+            var ios = PackageFile("Runtime/Internal/IosNativeBridge.cs");
+            StringAssert.Contains("public string? DeliveryStatus() => null;", ios);
+            StringAssert.Contains("public bool DeliveryOpenSettings(string setting) => false;", ios);
+            StringAssert.Contains("public void DeliveryShowGuidance(string setting, string? message, Action<bool> completion) => completion(false);", ios);
         }
     }
 }

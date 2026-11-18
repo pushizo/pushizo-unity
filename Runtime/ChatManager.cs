@@ -223,6 +223,19 @@ namespace PushizoSdk
             remove => _opened -= value;
         }
 
+        /// <summary>
+        /// Hazır sohbet ekranını oyunun üzerinde açar (Android <c>HsChatActivity</c>, iOS modal
+        /// <c>HSChatViewController</c>); ekran zaten açıksa yeniden açılmaz. Kendi arayüzünüzü çizmek için bu sınıftaki veri
+        /// çağrılarını kullanın. Editor'de yalnızca günlüğe yazılır.
+        /// </summary>
+        public void Show() => Pushizo.Bridge().ChatShow();
+
+        /// <summary><see cref="Show"/> ile açılan ekranı kapatır; kapatılacak açık ekran varsa true (Editor'de false).</summary>
+        public bool Hide() => Pushizo.Bridge().ChatHide();
+
+        /// <summary>Hazır sohbet ekranı şu an açık mı. Başlatılmadan önce ve Editor'de false.</summary>
+        public bool IsPresented => Pushizo.BridgeOrNull()?.ChatIsPresented() ?? false;
+
         /// <summary>Sohbeti etkinleştirir ve ziyaretçiyi bağlar (giriş yapmış kullanıcı, push aboneliği); konuşma varsa döner.</summary>
         public Task<ChatIdentifyResult> StartAsync(string? name = null, string? email = null, string? language = null)
         {
@@ -318,6 +331,10 @@ namespace PushizoSdk
 
         /// <summary>Canlı dinlemeyi durdurur (arka plana geçişte önerilir; temsilci mesajı push ile gelir).</summary>
         public Task StopListeningAsync() => Call<object?>("stopListening", new Dictionary<string, object?>(), _ => null);
+
+        /// <summary>Canlı dinleme (<see cref="StartListeningAsync"/>) açık mı. Editor'de false.</summary>
+        public Task<bool> IsListeningAsync() =>
+            Call("isListening", new Dictionary<string, object?>(), json => ChatJson.ParseBool(Require(json), "listening"));
 
         /// <summary>Ek dosyasının adresi; ziyaretçi belirtecini taşır, yalnızca görsel yükleyiciye verin ve loglamayın.</summary>
         public Task<string> GetAttachmentUrlAsync(string attachmentId, bool download = false)
@@ -430,6 +447,8 @@ namespace PushizoSdk
         public static int ParseUnread(string json) => (int)Long(Json.ParseObject(json), "unreadCount");
 
         public static string? ParseString(string json, string name) => Str(Json.ParseObject(json), name);
+
+        public static bool ParseBool(string json, string name) => Bool(Json.ParseObject(json), name);
 
         /// <summary><c>chat</c> olayı; bilinmeyen tür (daha yeni yerel köprü) null döner.</summary>
         public static ChatEventArgs? ParseEvent(string json)

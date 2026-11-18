@@ -70,6 +70,19 @@ namespace PushizoSdk
             Pushizo.Bridge().SetLanguage(languageCode.Trim());
         }
 
+        /// <summary>
+        /// Kullanıcı özelliği yazar (ör. <c>SetProperty("plan", "pro")</c>); <c>null</c> özelliği siler. Değer metin, sayı,
+        /// bool, tarih, Guid, enum, liste veya sözlük olabilir (liste ve sözlük içinde null olamaz). Anahtar 1-64
+        /// karakterdir. Çevrimdışıyken yerel kuyrukta bekler; geçersiz anahtar ya da değerde <see cref="ArgumentException"/>.
+        /// </summary>
+        public void SetProperty(string key, object? value)
+        {
+            var name = Validation.RequirePropertyKey(key, nameof(key));
+            var json = Json.Serialize(new Dictionary<string, object?> { ["value"] = EventProperties.NormalizeUserProperty(value, nameof(value)) });
+            var error = Pushizo.Bridge().SetUserProperty(name, json);
+            if (error != null) throw new ArgumentException(error, nameof(key));
+        }
+
         /// <summary>E-posta aboneliği ekler (küçük harfe çevrilir); geçersiz adreste <see cref="ArgumentException"/>.</summary>
         public void AddEmail(string email) => Pushizo.Bridge().AddEmail(Validation.RequireEmail(email, nameof(email)));
 
@@ -102,8 +115,55 @@ namespace PushizoSdk
             return Pushizo.Call(r => bridge.SetPreferences(json, r), result => BridgeJson.ParsePreferences(RequireJson(result)));
         }
 
+        /// <summary>
+        /// Reklam kişiselleştirme rızası (ADR-0037): true iken kullanıcının e-posta/telefon özeti app'in bağladığı reklam
+        /// platformlarının kitlelerine gönderilebilir; false rızayı geri alır (sonraki kitle senkronunda çıkarılır). Güncel
+        /// tercih listesini döndürür; hata davranışı <see cref="SetPreferencesAsync"/> ile aynıdır.
+        /// </summary>
+        public Task<UserPreferences> SetAdsPersonalizationConsentAsync(bool granted)
+        {
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.SetAdsPersonalizationConsent(granted, r), result => BridgeJson.ParsePreferences(RequireJson(result)));
+        }
+
+        /// <summary>Rıza kayıtları (<c>ads_personalization</c> …). Abonelik kaydı tamamlanmadan <see cref="PushizoException"/> (<c>NOT_READY</c>).</summary>
+        public Task<IReadOnlyList<UserConsent>> GetConsentsAsync()
+        {
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.GetConsents(r), json => BridgeJson.ParseConsents(RequireJson(json)));
+        }
+
+        /// <summary>
+        /// Fire OS ADM kayıt kimliğini bildirir (yalnızca Android; ADM kaydını kendisi yapan uygulamalar içindir, ana FCM
+        /// aboneliğinin yerine geçmez). Kimlik 8-4096 karakter olmalıdır; geçersizse <see cref="ArgumentException"/>. iOS ve
+        /// Editor'de etkisizdir.
+        /// </summary>
+        public void RegisterAdm(string token)
+        {
+            var value = token?.Trim() ?? string.Empty;
+            if (value.Length < 8 || value.Length > 4096) throw new ArgumentException("ADM kayıt kimliği 8-4096 karakter olmalı.", nameof(token));
+            var error = Pushizo.Bridge().RegisterAdm(value);
+            if (error != null) throw new ArgumentException(error, nameof(token));
+        }
+
         private static string RequireJson(string? json) =>
             json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.");
+    }
+
+    /// <summary>
+    /// Mobil reklam kimliği (<c>Pushizo.Ads</c>, ADR-0037). SDK reklam kitaplığı ve izin istemi içermez: kimliği (Android
+    /// GAID, iOS App Tracking Transparency izni sonrası IDFA) oyun okur ve verir. Kimlik yalnızca
+    /// <c>ads_personalization</c> rızası olan kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir. Editor'de etkisizdir.
+    /// </summary>
+    public sealed class AdsManager
+    {
+        internal AdsManager()
+        {
+        }
+
+        /// <summary>Reklam kimliğini yazar; null, boş veya sıfır kimlik sunucudaki kaydı siler.</summary>
+        public void SetAdvertisingId(string? id) =>
+            Pushizo.Bridge().SetAdvertisingId(string.IsNullOrWhiteSpace(id) ? null : id!.Trim());
     }
 
     /// <summary>Push aboneliği (<c>Pushizo.User.PushSubscription</c>).</summary>
@@ -277,6 +337,34 @@ namespace PushizoSdk
             Pushizo.Bridge().RemoveGroupedNotifications(group);
         }
 
+        /// <summary>
+        /// Rozet sayısını ayarlar. iOS: uygulama rozeti (bildirim servis uzantısıyla paylaşılan sayaç da eşitlenir).
+        /// Android: başlatıcı rozeti bildirimlerden üretildiği için yerel SDK sayıyı saklar ve bundan sonra gösterdiği
+        /// bildirimlere yazar (sayı gösteren başlatıcılar, Android 8+); tepside bildirim yokken rozet görünmez. Sonucu
+        /// öğrenmek için <see cref="TrySetBadgeCount"/>. Negatif değerde <see cref="ArgumentOutOfRangeException"/>.
+        /// </summary>
+        public void SetBadgeCount(int count) => TrySetBadgeCount(count);
+
+        /// <summary>
+        /// <see cref="SetBadgeCount"/> ile aynı işi yapar ve sonucu döndürür. Android: sayı saklandı ve rozet bu cihazda
+        /// gösterilebiliyorsa true; Android 8 öncesinde, bildirimler kapalıyken veya kanal rozeti kapatıldıysa false (sayı
+        /// yine saklanır). iOS: true. Editor: false.
+        /// </summary>
+        public bool TrySetBadgeCount(int count)
+        {
+            if (count < 0) throw new ArgumentOutOfRangeException(nameof(count), "Rozet sayısı negatif olamaz.");
+            return Pushizo.Bridge().SetBadgeCount(count);
+        }
+
+        /// <summary>Rozeti sıfırlar (iOS uygulama rozeti; Android'de saklanan sayı).</summary>
+        public void ClearBadge() => Pushizo.Bridge().SetBadgeCount(0);
+
+        /// <summary>
+        /// Android'de <see cref="SetBadgeCount"/> ile saklanan son sayı. iOS'ta yerel SDK rozet sayısını okumaya açmadığı
+        /// için, Editor'de ve başlatılmadan önce 0.
+        /// </summary>
+        public int BadgeCount => Pushizo.BridgeOrNull()?.GetBadgeCount() ?? 0;
+
         internal void DispatchClicked(NotificationClickedEventArgs args)
         {
             Action<NotificationClickedEventArgs>? handler;
@@ -409,6 +497,17 @@ namespace PushizoSdk
         {
         }
 
+        /// <summary>
+        /// Kutu değişti (yerel <c>Inbox.addObserver</c>; ana iş parçacığında). Okundu, tümü okundu ve arşivleme her
+        /// işlemde; listeleme ve sayım yalnızca okunmamış sayısı değiştiğinde bildirilir. Rozet güncellemek için kullanılır.
+        /// Editor'de olay üretilmez.
+        /// </summary>
+        public event Action<InboxChangedEventArgs>? Changed;
+
+        internal void DispatchChanged(InboxChangedEventArgs args) => Pushizo.Raise(Changed, args, "Inbox.Changed");
+
+        internal void Reset() => Changed = null;
+
         /// <summary>Öğeler (yeniden eskiye), okunmamış sayısı ve sonraki sayfa imleci (<paramref name="limit"/> 1-200).</summary>
         public Task<InboxPage> ListAsync(int limit = 50, string? cursor = null)
         {
@@ -455,6 +554,44 @@ namespace PushizoSdk
             json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.");
     }
 
+    /// <summary>
+    /// İçerik kartları (<c>Pushizo.ContentCards</c>, ADR-0082): kalıcı kart akışı. Gösterimde
+    /// <see cref="LogImpressionAsync"/>, tıklamada <see cref="LogClickAsync"/>, kapatmada <see cref="DismissAsync"/>.
+    /// </summary>
+    public sealed class ContentCardsManager
+    {
+        internal ContentCardsManager()
+        {
+        }
+
+        /// <summary>Kart akışı (<paramref name="limit"/> 1-100).</summary>
+        public Task<ContentCardFeed> ListAsync(int limit = 50)
+        {
+            Validation.RequireContentCardLimit(limit, nameof(limit));
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.ContentCardsList(limit, r), json => BridgeJson.ParseContentCardFeed(Require(json)));
+        }
+
+        /// <summary>Kart ekranda gösterildi (ilk gösterim kaydedilir).</summary>
+        public Task<ContentCard> LogImpressionAsync(string id) => Event(id, "impression");
+
+        /// <summary>Karta tıklandı (gösterim de sayılır).</summary>
+        public Task<ContentCard> LogClickAsync(string id) => Event(id, "click");
+
+        /// <summary>Kart kapatıldı; akıştan kalkar.</summary>
+        public Task<ContentCard> DismissAsync(string id) => Event(id, "dismiss");
+
+        private static Task<ContentCard> Event(string id, string eventName)
+        {
+            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Kart kimliği gerekli.", nameof(id));
+            var bridge = Pushizo.Bridge();
+            return Pushizo.Call(r => bridge.ContentCardEvent(id, eventName, r), json => BridgeJson.ParseContentCard(Require(json)));
+        }
+
+        private static string Require(string? json) =>
+            json ?? throw new PushizoException(PushizoException.InvalidResponse, "Köprü yanıtı boş.");
+    }
+
     /// <summary>Oturum ve özel olaylar (<c>Pushizo.Session</c>).</summary>
     public sealed class SessionManager
     {
@@ -466,13 +603,24 @@ namespace PushizoSdk
         /// Özel olay / outcome gönderir (çevrimdışıyken kuyrukta bekler); olay adı in-app tetiklerini de çalıştırır.
         /// Özellikler: metin, sayı, bool, tarih, Guid, enum, iç içe sözlük ve liste (en fazla 16 seviye).
         /// </summary>
-        public void SendEvent(string name, IReadOnlyDictionary<string, object?>? properties = null, double? value = null)
+        public void SendEvent(string name, IReadOnlyDictionary<string, object?>? properties = null, double? value = null) =>
+            Send(name, properties, value, null);
+
+        /// <summary>
+        /// Olayı tekilleştirme kimliğiyle gönderir: reklam pikseli ya da Conversions API ile aynı <paramref name="eventId"/>
+        /// verilirse sunucu olayı bir kez kaydeder (ADR-0038). Kimlik 8-64 karakterdir (harf, rakam ve <c>. _ : -</c>);
+        /// boşsa ya da biçim geçersizse yerel SDK kendi kimliğini üretir.
+        /// </summary>
+        public void SendEvent(string name, IReadOnlyDictionary<string, object?>? properties, double? value, string? eventId) =>
+            Send(name, properties, value, string.IsNullOrWhiteSpace(eventId) ? null : eventId!.Trim());
+
+        private static void Send(string name, IReadOnlyDictionary<string, object?>? properties, double? value, string? eventId)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Olay adı gerekli.", nameof(name));
             if (value is double v && (double.IsNaN(v) || double.IsInfinity(v)))
                 throw new ArgumentException("Olay değeri sonlu bir sayı olmalı.", nameof(value));
             var json = Json.Serialize(EventProperties.Normalize(properties, nameof(properties)));
-            Pushizo.Bridge().SendEvent(name.Trim(), json, value ?? 0d, value.HasValue);
+            Pushizo.Bridge().SendEvent(name.Trim(), json, value ?? 0d, value.HasValue, eventId);
         }
     }
 
@@ -574,6 +722,37 @@ namespace PushizoSdk
             return Pushizo.CallBool((bridge, done) => bridge.RequestLocationPermission(text, done));
         }
 
+        /// <summary>
+        /// Ön plan konum izni verilmiş mi (Android yaklaşık veya hassas; iOS "kullanırken" veya "her zaman"). Başlatılmadan
+        /// önce ve Editor'de false.
+        /// </summary>
+        public bool PermissionGranted => Pushizo.BridgeOrNull()?.GetLocationPermissionGranted() ?? false;
+
+        /// <summary>
+        /// Arka plan konum izni verilmiş mi (Android <c>ACCESS_BACKGROUND_LOCATION</c> + hassas konum; iOS "her zaman").
+        /// Başlatılmadan önce ve Editor'de false.
+        /// </summary>
+        public bool BackgroundPermissionGranted => Pushizo.BridgeOrNull()?.GetLocationBackgroundPermissionGranted() ?? false;
+
+        /// <summary>
+        /// Arka plan konum iznini ister (bölge izleme için; önce ön plan izni verilmiş olmalıdır). Android: açıklama diyaloğu
+        /// (<paramref name="rationale"/>; boşsa SDK'nın yerelleştirilmiş metni), ardından sistem izni (Android 11+ Ayarlar
+        /// ekranı); manifest'te <c>ACCESS_BACKGROUND_LOCATION</c> yoksa false. iOS: "her zaman" izni
+        /// (<paramref name="rationale"/> kullanılmaz; <c>NSLocationAlwaysAndWhenInUseUsageDescription</c> gerekir). Sonuç ana
+        /// iş parçacığında: izin var veya verildiyse true. Editor'de false.
+        /// </summary>
+        public Task<bool> RequestBackgroundPermissionAsync(string? rationale = null)
+        {
+            var text = string.IsNullOrWhiteSpace(rationale) ? null : rationale!.Trim();
+            return Pushizo.CallBool((bridge, done) => bridge.RequestBackgroundLocationPermission(text, done));
+        }
+
+        /// <summary>
+        /// "Her zaman" konum iznini ister (iOS adı). <see cref="RequestBackgroundPermissionAsync"/> ile aynı kavramdır;
+        /// Android'de arka plan konum izni akışını SDK'nın varsayılan açıklamasıyla çalıştırır.
+        /// </summary>
+        public Task<bool> RequestAlwaysPermissionAsync() => RequestBackgroundPermissionAsync();
+
         /// <summary>Arka plan bölge izleme açık mı (kalıcı tercih; varsayılan kapalı). Başlatılmadan önce false.</summary>
         public bool IsGeofencingEnabled => Pushizo.BridgeOrNull()?.GetGeofencingEnabled() ?? false;
 
@@ -588,6 +767,91 @@ namespace PushizoSdk
     }
 
     /// <summary>
+    /// Android teslimat güçlendirme (<c>Pushizo.Delivery</c>, ADR-0092): bazı üreticilerin pil/otomatik başlatma yöneticisi
+    /// arka plandaki uygulamayı durdurduğu için bildirimler gecikir ya da gelmez. Bu yüzey cihazdaki kısıtları okur ve
+    /// kullanıcıyı ilgili ayar ekranına götürür. Yalnızca Android cihaz derlemesinde etkilidir: iOS'ta, Editor'de ve SDK
+    /// başlatılmadan önce durum <see cref="DeliveryStatus.Unsupported"/> döner, <see cref="OpenSettings"/> ile
+    /// <see cref="ShowGuidanceAsync"/> hiçbir şey yapmadan false döner. Hiçbir çağrı istisna atmaz.
+    /// </summary>
+    public sealed class DeliveryManager
+    {
+        /// <summary>Hazır diyaloğun yeniden önerilme aralığı (gün; yerel SDK varsayılanıyla aynı).</summary>
+        public const int DefaultGuidanceIntervalDays = 14;
+
+        internal DeliveryManager()
+        {
+        }
+
+        /// <summary>Cihazın teslim durumu: üretici, ROM, pil muafiyeti, arka plan kısıtı, risk ve önerilen ayar ekranları.</summary>
+        public DeliveryStatus GetStatus()
+        {
+            var bridge = Pushizo.BridgeOrNull();
+            if (bridge is null) return DeliveryStatus.Unsupported;
+            try
+            {
+                return BridgeJson.ParseDeliveryStatus(bridge.DeliveryStatus());
+            }
+            catch (Exception e)
+            {
+                SdkLog.Write(LogLevel.Warn, "teslim durumu okunamadı", e);
+                return DeliveryStatus.Unsupported;
+            }
+        }
+
+        /// <summary>
+        /// Hazır açıklama diyaloğu şimdi gösterilmeli mi: teslim riski var ve diyalog son <paramref name="minIntervalDays"/>
+        /// gün içinde gösterilmedi (negatif değer 0 sayılır).
+        /// </summary>
+        public bool ShouldShowGuidance(int minIntervalDays = DefaultGuidanceIntervalDays) =>
+            Guard(bridge => bridge.DeliveryShouldShowGuidance(Math.Max(0, minIntervalDays)), "teslim yönlendirmesi denetlenemedi");
+
+        /// <summary>
+        /// Ayar ekranını açar. <see cref="DeliverySetting.Auto"/> duruma en uygun ekranı seçer; üreticiye özgü ekran
+        /// bulunamazsa standart Android ekranına düşülür. Bir ekran açıldıysa true.
+        /// </summary>
+        public bool OpenSettings(DeliverySetting setting = DeliverySetting.Auto) =>
+            Guard(bridge => bridge.DeliveryOpenSettings(BridgeJson.DeliverySettingWire(setting)), "teslimat ayar ekranı açılamadı");
+
+        /// <summary>
+        /// Hazır açıklama diyaloğunu gösterir (22 dil; <paramref name="message"/> verilirse SDK metni yerine o gösterilir).
+        /// Kullanıcı kabul ederse <paramref name="setting"/> ekranı açılır. Sonuç ana iş parçacığında: ayar ekranı açıldıysa
+        /// true; kullanıcı vazgeçtiyse ya da ekran açılamadıysa false. SDK diyaloğu kendiliğinden göstermez; uygun anı oyun
+        /// seçer (<see cref="ShouldShowGuidance"/>).
+        /// </summary>
+        public async Task<bool> ShowGuidanceAsync(DeliverySetting setting = DeliverySetting.Auto, string? message = null)
+        {
+            if (Pushizo.BridgeOrNull() is null) return false;
+            var wire = BridgeJson.DeliverySettingWire(setting);
+            var text = string.IsNullOrWhiteSpace(message) ? null : message!.Trim();
+            try
+            {
+                return await Pushizo.CallBool((bridge, done) => bridge.DeliveryShowGuidance(wire, text, done));
+            }
+            catch (Exception e)
+            {
+                SdkLog.Write(LogLevel.Warn, "teslimat açıklama diyaloğu gösterilemedi", e);
+                return false;
+            }
+        }
+
+        /// <summary>Köprü çağrısı başlatılmamış SDK'da ve yerel hatada false döner (bu yüzey istisna atmaz).</summary>
+        private static bool Guard(Func<INativeBridge, bool> call, string failure)
+        {
+            var bridge = Pushizo.BridgeOrNull();
+            if (bridge is null) return false;
+            try
+            {
+                return call(bridge);
+            }
+            catch (Exception e)
+            {
+                SdkLog.Write(LogLevel.Warn, failure, e);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Özellik bayrakları (<c>Pushizo.FeatureFlags</c>, ADR-0066). Değerler yerel SDK'da oturum başında yenilenir ve
     /// cihazda saklanır; okumalar eşzamanlıdır ve ağ çağrısı yapmaz. Editor ve yerel SDK'sı olmayan platformlarda
     /// okumalar varsayılan değeri, <see cref="RefreshAsync"/> false döndürür.
@@ -597,6 +861,17 @@ namespace PushizoSdk
         internal FeatureFlagsManager()
         {
         }
+
+        /// <summary>
+        /// Bayrak değerleri sunucudan başarıyla yenilendi (yerel <c>FeatureFlags.addObserver</c>; oturum başında ve
+        /// <see cref="RefreshAsync"/> sonrasında, ana iş parçacığında). Güncel değerler <see cref="IsEnabled"/> ve
+        /// <see cref="GetValue"/> ile okunur. Editor'de olay üretilmez.
+        /// </summary>
+        public event Action? Changed;
+
+        internal void DispatchChanged() => Pushizo.Raise(Changed, "FeatureFlags.Changed");
+
+        internal void Reset() => Changed = null;
 
         /// <summary>
         /// Değerleri hemen yeniler; sonuç (ana iş parçacığında) değerlerin güncellenip güncellenmediğidir. Hata son

@@ -74,6 +74,44 @@ namespace PushizoSdk.Internal
 
         public static InboxItem ParseInboxItem(string json) => ReadInboxItem(Object(json));
 
+        public static ContentCardFeed ParseContentCardFeed(string json)
+        {
+            var root = Object(json);
+            var cards = new List<ContentCard>();
+            if (root.TryGetValue("cards", out var arr) && arr is List<object?> list)
+            {
+                foreach (var element in list)
+                {
+                    if (element is Dictionary<string, object?> map) cards.Add(ReadContentCard(map));
+                }
+            }
+            var unviewed = root.TryGetValue("unviewedCount", out var u) && u is long count ? (int)count : cards.Count(c => !c.Viewed);
+            return new ContentCardFeed(cards, unviewed);
+        }
+
+        public static ContentCard ParseContentCard(string json) => ReadContentCard(Object(json));
+
+        /// <summary>
+        /// <c>inbox</c> olayı: <c>{"type":"listed|read|read_all|archived|count","itemId":…|null,"unreadCount":n}</c>.
+        /// Tanınmayan tür (yeni yerel SDK) null döner ve olay yok sayılır.
+        /// </summary>
+        public static InboxChangedEventArgs? ParseInboxChange(string json)
+        {
+            var root = Object(json);
+            InboxChangeType type;
+            switch (Str(root, "type"))
+            {
+                case "listed": type = InboxChangeType.Listed; break;
+                case "read": type = InboxChangeType.Read; break;
+                case "read_all": type = InboxChangeType.ReadAll; break;
+                case "archived": type = InboxChangeType.Archived; break;
+                case "count": type = InboxChangeType.Count; break;
+                default: return null;
+            }
+            var unread = root.TryGetValue("unreadCount", out var u) && u is long count ? (int)count : throw Invalid("unreadCount");
+            return new InboxChangedEventArgs(type, Str(root, "itemId"), unread);
+        }
+
         /// <summary><c>{"unreadCount":n}</c>.</summary>
         public static int ParseUnreadCount(string json)
         {
@@ -125,6 +163,42 @@ namespace PushizoSdk.Internal
             return new UserPreferences(preferences, categories);
         }
 
+        /// <summary><c>{"consents":[{"purpose","granted","source","updatedAt"}]}</c>; amacı olmayan kayıt atlanır (yerel SDK'larla aynı).</summary>
+        public static IReadOnlyList<UserConsent> ParseConsents(string json)
+        {
+            var consents = new List<UserConsent>();
+            if (Object(json).TryGetValue("consents", out var value) && value is List<object?> list)
+            {
+                foreach (var element in list)
+                {
+                    if (!(element is Dictionary<string, object?> e)) continue;
+                    var purpose = Str(e, "purpose");
+                    if (string.IsNullOrEmpty(purpose)) continue;
+                    consents.Add(new UserConsent(purpose!, Bool(e, "granted"), Str(e, "source"), Millis(e, "updatedAt")));
+                }
+            }
+            return consents;
+        }
+
+        /// <summary>
+        /// <see cref="INativeBridge.LoginWithProfile"/> gövdesi: doğrulanmış profil; boş alanlar yazılmaz. Profil tümüyle
+        /// boşsa null (düz giriş yeterlidir).
+        /// </summary>
+        public static string? ProfileToJson(PushizoUserProfile profile)
+        {
+            var body = new Dictionary<string, object?>();
+            if (!string.IsNullOrWhiteSpace(profile.Email)) body["email"] = Validation.RequireEmail(profile.Email!, nameof(profile));
+            if (!string.IsNullOrWhiteSpace(profile.Sms)) body["sms"] = Validation.RequirePhone(profile.Sms!, nameof(profile));
+            if (profile.Tags != null)
+            {
+                var tags = Validation.RequireTags(profile.Tags, nameof(profile));
+                if (tags.Count > 0) body["tags"] = tags.ToDictionary(p => p.Key, p => (object?)p.Value);
+            }
+            if (profile.Aliases != null && profile.Aliases.Count > 0)
+                body["aliases"] = Validation.NormalizeAliases(profile.Aliases, nameof(profile)).ToDictionary(p => p.Key, p => (object?)p.Value);
+            return body.Count == 0 ? null : Json.Serialize(body);
+        }
+
         /// <summary>
         /// <c>{"value":…}</c> (<see cref="INativeBridge.FeatureFlagValue"/>): metin, long, double, bool, sözlük veya liste;
         /// yanıt boşsa ya da değer yoksa <paramref name="fallback"/>.
@@ -160,6 +234,52 @@ namespace PushizoSdk.Internal
                 ["channel"] = p.Channel,
                 ["optedIn"] = p.OptedIn,
             }).ToList());
+
+        /// <summary><see cref="DeliverySetting"/> → köprü değeri (<c>auto_start</c> …).</summary>
+        public static string DeliverySettingWire(DeliverySetting setting) => setting switch
+        {
+            DeliverySetting.Notifications => "notifications",
+            DeliverySetting.AutoStart => "auto_start",
+            DeliverySetting.BatteryOptimization => "battery_optimization",
+            DeliverySetting.AppDetails => "app_details",
+            _ => "auto",
+        };
+
+        /// <summary>
+        /// Android teslim durumu (ADR-0092). JSON yoksa (iOS, Editor, başlatılmamış yerel SDK) <see cref="DeliveryStatus.Unsupported"/>;
+        /// yerel SDK'nın ileride ekleyeceği, bu sürümün tanımadığı ayar ekranı atlanır.
+        /// </summary>
+        public static DeliveryStatus ParseDeliveryStatus(string? json)
+        {
+            if (string.IsNullOrEmpty(json)) return DeliveryStatus.Unsupported;
+            var root = Object(json!);
+            var settings = new List<DeliverySetting>();
+            if (root.TryGetValue("recommendedSettings", out var arr) && arr is List<object?> list)
+            {
+                foreach (var wire in list.OfType<string>())
+                {
+                    switch (wire)
+                    {
+                        case "notifications": settings.Add(DeliverySetting.Notifications); break;
+                        case "auto_start": settings.Add(DeliverySetting.AutoStart); break;
+                        case "battery_optimization": settings.Add(DeliverySetting.BatteryOptimization); break;
+                        case "app_details": settings.Add(DeliverySetting.AppDetails); break;
+                    }
+                }
+            }
+            var risk = Str(root, "risk") switch
+            {
+                "high" => DeliveryRisk.High,
+                "elevated" => DeliveryRisk.Elevated,
+                _ => DeliveryRisk.None,
+            };
+            return new DeliveryStatus(
+                true, Str(root, "manufacturer") ?? string.Empty, Str(root, "brand") ?? string.Empty, Str(root, "vendor") ?? "other",
+                Bool(root, "aggressiveVendor"), Str(root, "rom") ?? string.Empty, Str(root, "romVersion"),
+                Bool(root, "notificationsEnabled"), Bool(root, "channelBlocked"), Bool(root, "batteryOptimizationExempt"),
+                Bool(root, "backgroundRestricted"), Str(root, "standbyBucket"), Bool(root, "powerSaveMode"), Bool(root, "dataSaverEnabled"),
+                Bool(root, "restricted"), risk, settings.AsReadOnly());
+        }
 
         /// <summary><c>{"key":"value"}</c> biçimindeki metin sözlüğü (tag/trigger); sayı/bool değerler metne çevrilir.</summary>
         public static Dictionary<string, string> ParseStringMap(string? json)
@@ -218,6 +338,23 @@ namespace PushizoSdk.Internal
                     ? (int)l
                     : (int?)null);
         }
+
+        private static ContentCard ReadContentCard(Dictionary<string, object?> e) => new ContentCard(
+            Str(e, "id") ?? throw Invalid("id"),
+            Str(e, "messageId"),
+            ContentCard.ParseType(Str(e, "type")),
+            Str(e, "title"),
+            Str(e, "body"),
+            Str(e, "url"),
+            Str(e, "imageUrl"),
+            Str(e, "buttonText"),
+            e.TryGetValue("data", out var data) && data is Dictionary<string, object?> d ? ReadStringMap(d) : new Dictionary<string, string>(),
+            Bool(e, "pinned"),
+            e.TryGetValue("priority", out var p) && p is long priority ? (int)priority : 0,
+            Bool(e, "viewed"),
+            Bool(e, "clicked"),
+            Millis(e, "expiresAt"),
+            Millis(e, "createdAt"));
 
         private static InboxItem ReadInboxItem(Dictionary<string, object?> e) => new InboxItem(
             Str(e, "id") ?? throw Invalid("id"),

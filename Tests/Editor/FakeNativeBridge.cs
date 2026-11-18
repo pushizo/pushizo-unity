@@ -65,6 +65,91 @@ namespace PushizoSdk.Tests
             return LoginError;
         }
 
+        public string? LoginWithProfile(string externalId, string profileJson, string? identityHash, string? jwt)
+        {
+            Record("loginWithProfile:" + externalId + ":" + profileJson + ":" + (identityHash ?? "<null>") + (jwt == null ? "" : ":jwt=" + jwt));
+            return LoginError;
+        }
+
+        /// <summary>RegisterAdm yanıtı (yerel SDK'nın geçersiz kimlik hatası; null = başarı).</summary>
+        public string? RegisterAdmError { get; set; }
+
+        public string? RegisterAdm(string token)
+        {
+            Record("registerAdm:" + token);
+            return RegisterAdmError;
+        }
+
+        /// <summary>Yerel rozet sonucu (Android: rozet gösterilebiliyor mu) ve saklanan sayı.</summary>
+        public bool BadgeResult { get; set; } = true;
+        public int BadgeCountValue { get; private set; }
+
+        public bool SetBadgeCount(int count)
+        {
+            Record("badge:" + count);
+            BadgeCountValue = count;
+            return BadgeResult;
+        }
+
+        public int GetBadgeCount() => BadgeCountValue;
+
+        /// <summary>SetUserProperty yanıtı (yerel SDK'nın anahtar hatası; null = başarı).</summary>
+        public string? UserPropertyError { get; set; }
+
+        public string? SetUserProperty(string key, string valueJson)
+        {
+            Record("setUserProperty:" + key + ":" + valueJson);
+            return UserPropertyError;
+        }
+
+        /// <summary>Hazır sohbet ekranı açık mı (Show/Hide ile değişir).</summary>
+        public bool ChatPresented { get; private set; }
+
+        public void ChatShow()
+        {
+            Record("chatShow");
+            ChatPresented = true;
+        }
+
+        public bool ChatHide()
+        {
+            Record("chatHide");
+            var was = ChatPresented;
+            ChatPresented = false;
+            return was;
+        }
+
+        public bool ChatIsPresented() => ChatPresented;
+
+        public void SetAdvertisingId(string? id) => Record("advertisingId:" + (id ?? "<null>"));
+
+        /// <summary>Rıza yanıtı (<c>{"consents":[…]}</c>).</summary>
+        public string? ConsentsJson { get; set; } = @"{""consents"":[]}";
+
+        public void SetAdsPersonalizationConsent(bool granted, NativeResult result) =>
+            RespondPreferences("setAdsPersonalizationConsent:" + granted, result);
+
+        public void GetConsents(NativeResult result)
+        {
+            Record("getConsents");
+            result(PreferencesErrorCode == null ? ConsentsJson : null, PreferencesErrorCode, PreferencesErrorCode);
+        }
+
+        /// <summary>Yerel konum izinleri ve arka plan izni isteğinin sonucu.</summary>
+        public bool LocationPermissionGrantedValue { get; set; }
+        public bool LocationBackgroundPermissionGrantedValue { get; set; }
+        public bool BackgroundLocationPermissionResult { get; set; } = true;
+
+        public bool GetLocationPermissionGranted() => LocationPermissionGrantedValue;
+
+        public bool GetLocationBackgroundPermissionGranted() => LocationBackgroundPermissionGrantedValue;
+
+        public void RequestBackgroundLocationPermission(string? rationale, Action<bool> completion)
+        {
+            Record("requestBackgroundLocationPermission:" + (rationale ?? "<null>"));
+            completion(BackgroundLocationPermissionResult);
+        }
+
         public string? UpdateUserJwt(string jwt)
         {
             Record("updateUserJwt:" + jwt);
@@ -127,6 +212,8 @@ namespace PushizoSdk.Tests
         public void InboxMarkAllRead(NativeResult result) => Respond("inboxMarkAllRead", result);
         public void InboxArchive(string id, NativeResult result) => Respond("inboxArchive:" + id, result);
         public void InboxUnreadCount(NativeResult result) => Respond("inboxUnreadCount", result);
+        public void ContentCardsList(int limit, NativeResult result) => Respond("contentCardsList:" + limit, result);
+        public void ContentCardEvent(string id, string eventName, NativeResult result) => Respond("contentCardEvent:" + id + ":" + eventName, result);
 
         private void RespondPreferences(string call, NativeResult result)
         {
@@ -137,11 +224,14 @@ namespace PushizoSdk.Tests
         public void GetPreferences(NativeResult result) => RespondPreferences("getPreferences", result);
         public void SetPreferences(string preferencesJson, NativeResult result) => RespondPreferences("setPreferences:" + preferencesJson, result);
 
-        public void SendEvent(string name, string propertiesJson, double value, bool hasValue)
+        public string? LastEventId { get; private set; }
+
+        public void SendEvent(string name, string propertiesJson, double value, bool hasValue, string? eventId)
         {
             Record("sendEvent:" + name);
             LastEventJson = propertiesJson;
             LastEventHasValue = hasValue;
+            LastEventId = eventId;
         }
 
         /// <summary>false: Android köprüsü gibi Live Activities desteklenmez.</summary>
@@ -191,6 +281,43 @@ namespace PushizoSdk.Tests
         {
             GeofencingEnabledValue = enabled;
             Record("geofencingEnabled:" + enabled);
+        }
+
+        /// <summary>Yerel teslim durumu JSON'u (null: teşhis yok).</summary>
+        public string? DeliveryStatusJson { get; set; }
+
+        /// <summary><c>shouldShowGuidance</c>, <c>openSettings</c> ve <c>showGuidance</c> sonucu.</summary>
+        public bool DeliveryResult { get; set; } = true;
+
+        /// <summary>Teslimat çağrılarında fırlatılacak yerel hata (JNI hatası benzetimi).</summary>
+        public Exception? DeliveryFailure { get; set; }
+
+        public string? DeliveryStatus()
+        {
+            Record("deliveryStatus");
+            if (DeliveryFailure != null) throw DeliveryFailure;
+            return DeliveryStatusJson;
+        }
+
+        public bool DeliveryShouldShowGuidance(int minIntervalDays)
+        {
+            Record("deliveryShouldShowGuidance:" + minIntervalDays);
+            if (DeliveryFailure != null) throw DeliveryFailure;
+            return DeliveryResult;
+        }
+
+        public bool DeliveryOpenSettings(string setting)
+        {
+            Record("deliveryOpenSettings:" + setting);
+            if (DeliveryFailure != null) throw DeliveryFailure;
+            return DeliveryResult;
+        }
+
+        public void DeliveryShowGuidance(string setting, string? message, Action<bool> completion)
+        {
+            Record("deliveryShowGuidance:" + setting + ":" + (message ?? "<null>"));
+            if (DeliveryFailure != null) throw DeliveryFailure;
+            completion(DeliveryResult);
         }
 
         /// <summary>Bayrak yenileme sonucu.</summary>

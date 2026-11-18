@@ -20,7 +20,7 @@ namespace PushizoSdk
     public static class Pushizo
     {
         /// <summary>Bu C# katmanının sürümü.</summary>
-        public const string SdkVersion = "0.2.0";
+        public const string SdkVersion = "0.3.0";
 
         private static readonly object s_gate = new object();
         private static INativeBridge? s_bridge;
@@ -38,11 +38,17 @@ namespace PushizoSdk
         public static NotificationsManager Notifications { get; } = new NotificationsManager();
         public static InAppMessagesManager InAppMessages { get; } = new InAppMessagesManager();
         public static InboxManager Inbox { get; } = new InboxManager();
+        /// <summary>İçerik kartları (ADR-0082; Android ve iOS cihaz derlemeleri).</summary>
+        public static ContentCardsManager ContentCards { get; } = new ContentCardsManager();
         /// <summary>Canlı sohbet (ADR-0040; Android ve iOS cihaz derlemeleri).</summary>
         public static ChatManager Chat { get; } = new ChatManager();
         public static SessionManager Session { get; } = new SessionManager();
         public static LiveActivitiesManager LiveActivities { get; } = new LiveActivitiesManager();
         public static LocationManager Location { get; } = new LocationManager();
+        /// <summary>Mobil reklam kimliği (ADR-0037; Android ve iOS cihaz derlemeleri).</summary>
+        public static AdsManager Ads { get; } = new AdsManager();
+        /// <summary>Android teslimat güçlendirme (ADR-0092; yalnızca Android cihaz derlemesinde etkilidir).</summary>
+        public static DeliveryManager Delivery { get; } = new DeliveryManager();
         /// <summary>Özellik bayrakları (ADR-0066).</summary>
         public static FeatureFlagsManager FeatureFlags { get; } = new FeatureFlagsManager();
         /// <summary>Gömülü yerleşimler (ADR-0068).</summary>
@@ -100,6 +106,23 @@ namespace PushizoSdk
                 externalId,
                 string.IsNullOrEmpty(identityHash) ? null : identityHash,
                 string.IsNullOrWhiteSpace(jwt) ? null : jwt));
+        }
+
+        /// <summary>
+        /// Cihazı kullanıcıya bağlar ve <paramref name="profile"/> alanlarını (e-posta, SMS, tag, alias) tek çağrıda ayarlar.
+        /// Kimlik kanıtı diğer <see cref="Login(string, string, string)"/> ile aynıdır. Geçersiz e-posta/telefon/tag/alias
+        /// girişten önce <see cref="ArgumentException"/> verir; kimlik değişimi yarım kalmaz.
+        /// </summary>
+        /// <exception cref="PushizoException">Verilen kanıt app'in kimlik doğrulama kipine uymuyorsa (<c>NOT_READY</c>).</exception>
+        public static void Login(string externalId, PushizoUserProfile profile, string? identityHash = null, string? jwt = null)
+        {
+            if (string.IsNullOrWhiteSpace(externalId)) throw new ArgumentException("externalId gerekli.", nameof(externalId));
+            var profileJson = BridgeJson.ProfileToJson(profile);
+            var hash = string.IsNullOrEmpty(identityHash) ? null : identityHash;
+            var token = string.IsNullOrWhiteSpace(jwt) ? null : jwt;
+            ThrowIfFailed(profileJson is null
+                ? Bridge().Login(externalId, hash, token)
+                : Bridge().LoginWithProfile(externalId, profileJson, hash, token));
         }
 
         /// <summary>
@@ -229,6 +252,15 @@ namespace PushizoSdk
                     case "chatOpen":
                         Chat.DispatchOpened(ChatJson.ParseOpened(json));
                         break;
+                    case "featureFlags":
+                        FeatureFlags.DispatchChanged();
+                        break;
+                    case "inbox":
+                    {
+                        var change = BridgeJson.ParseInboxChange(json);
+                        if (change != null) Inbox.DispatchChanged(change);
+                        break;
+                    }
                     default:
                         SdkLog.Write(LogLevel.Debug, $"bilinmeyen yerel olay türü yok sayıldı: {type}");
                         break;
@@ -257,6 +289,23 @@ namespace PushizoSdk
             }
         }
 
+        /// <summary>Parametresiz olay için <see cref="Raise{T}"/> eşdeğeri.</summary>
+        internal static void Raise(Action? handler, string eventName)
+        {
+            if (handler is null) return;
+            foreach (var d in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action)d)();
+                }
+                catch (Exception e)
+                {
+                    SdkLog.Write(LogLevel.Error, $"{eventName} olay işleyicisi hata verdi", e);
+                }
+            }
+        }
+
         /// <summary>Birim testleri için: köprüyü ve dağıtıcıyı değiştirir, durumu sıfırlar.</summary>
         internal static void ResetForTests(INativeBridge bridge, IMainThreadDispatcher dispatcher)
         {
@@ -269,6 +318,8 @@ namespace PushizoSdk
                 User.PushSubscription.Reset();
                 Notifications.Reset();
                 InAppMessages.Reset();
+                Inbox.Reset();
+                FeatureFlags.Reset();
                 Chat.Reset();
                 Debug.Reset();
                 SdkLog.Level = LogLevel.Warn;
